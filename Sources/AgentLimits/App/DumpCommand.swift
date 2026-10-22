@@ -46,6 +46,9 @@ enum DumpCommand {
         print("\nTokens today: \(Formatters.compactTokens(stats.today))  (computed in \(String(format: "%.1f", Date().timeIntervalSince(start)))s)")
         for d in stats.days { print("  \(DayKey.string(d.day)): \(Formatters.compactTokens(d.total))") }
         for m in stats.models.prefix(5) { print("  \(m.model): \(Formatters.compactTokens(m.tokens))") }
+        print("  today: \(stats.todayPrompts) prompts, \(stats.todayToolCalls) tool calls, \(stats.todaySessions) sessions, ≈ $\(String(format: "%.2f", stats.todayCost)) (+\(Formatters.compactTokens(stats.todayUnpriced)) unpriced)")
+        print("  streak: \(stats.currentStreak) days, longest \(stats.longestStreak)")
+        for p in stats.todayProjects.prefix(3) { print("  project: \(p.name) \(Formatters.compactTokens(p.tokens))") }
         for l in stats.live { print("  live: \(l.provider.displayName) \(l.project) \(Formatters.compactTokens(l.tokens))") }
     }
 }

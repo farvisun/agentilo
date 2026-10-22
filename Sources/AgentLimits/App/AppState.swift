@@ -99,7 +99,7 @@ final class AppState {
     /// Pages of the expanded notch, in order.
     var pages: [NotchPage] {
         (agents.sessions.isEmpty ? [] : [.agents]) + limitAccounts.map { .account($0) }
-            + (settings.showTokenStats ? [.stats] : [])
+            + (settings.showTokenStats ? [.stats, .activity] : [])
     }
 
     var pageCount: Int { pages.count }

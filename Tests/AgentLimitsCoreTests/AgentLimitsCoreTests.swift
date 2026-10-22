@@ -568,3 +568,66 @@ final class ApprovalTests: XCTestCase {
         XCTAssertEqual(HookInstaller.status(for: acct, executable: "/x/AgentLimits", approvals: true, approvalTimeout: 60), .outdated)
     }
 }
+
+final class ActivityStatsTests: XCTestCase {
+    func testPricing() throws {
+        XCTAssertEqual(Pricing.rate(for: "claude-opus-5-5")?.input, 4)
+        XCTAssertEqual(Pricing.rate(for: "claude-opus-5-20260101")?.input, 5)
+        XCTAssertEqual(Pricing.rate(for: "claude-sonnet-4-6")?.output, 15)
+        XCTAssertNil(Pricing.rate(for: "gpt-6.1-sol"))
+        // 1M input + 1M output + 1M cache write + 1M cache read on Opus 5.5: 4 + 20 + 5 + 0.2.
+        let c = try XCTUnwrap(Pricing.cost(model: "claude-opus-5-5", input: 1e6, output: 1e6, cacheWrite: 1e6, cacheRead: 1e6))
+        XCTAssertEqual(c, 29.2, accuracy: 1e-9)
+    }
+
+    func testClaudeCountsPromptsAndSplitToolUses() {
+        let log = """
+        {"type":"user","promptId":"p1","timestamp":"2026-10-20T10:00:00Z","cwd":"/x/web","message":{"role":"user","content":"fix it"}}
+        {"type":"user","timestamp":"2026-10-20T10:00:00Z","message":{"role":"user","content":"<command-name>/clear</command-name>"}}
+        {"type":"assistant","requestId":"r1","timestamp":"2026-10-20T10:00:01Z","message":{"id":"m1","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"t1","name":"Bash"}],"usage":{"input_tokens":1000000,"output_tokens":0}}}
+        {"type":"assistant","requestId":"r1","timestamp":"2026-10-20T10:00:01Z","message":{"id":"m1","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"t2","name":"Read"}],"usage":{"input_tokens":1000000,"output_tokens":0}}}
+        {"type":"user","timestamp":"2026-10-20T10:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1"}]}}
+
+        """
+        let agg = ClaudeLogParser.parse(Data(log.utf8))
+        XCTAssertEqual(agg.activity.filter { $0.a == .prompt }.count, 1)
+        XCTAssertEqual(agg.activity.filter { $0.a == .tool }.count, 2)
+        XCTAssertEqual(agg.entries.count, 1)
+        XCTAssertEqual(try XCTUnwrap(agg.entries.first?.c), 4, accuracy: 1e-9)
+    }
+
+    func testCodexCountsTurnsAndCalls() {
+        let log = """
+        {"timestamp":"2026-10-20T10:00:00Z","type":"event_msg","payload":{"type":"task_started"}}
+        {"timestamp":"2026-10-20T10:00:01Z","type":"response_item","payload":{"type":"custom_tool_call","call_id":"c1"}}
+        {"timestamp":"2026-10-20T10:00:02Z","type":"response_item","payload":{"type":"function_call","call_id":"c2"}}
+        {"timestamp":"2026-10-20T10:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c2"}}
+
+        """
+        let agg = CodexLogParser.parse(Data(log.utf8))
+        XCTAssertEqual(agg.activity.map(\.a), [.prompt, .tool, .tool])
+    }
+
+    func testStreaksAndHistoryMerge() throws {
+        let cal = Calendar.current
+        let now = try XCTUnwrap(cal.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 12)))
+        func key(_ ago: Int) -> Int32 { DayKey.int(cal.date(byAdding: .day, value: -ago, to: now)!) }
+        func rec(_ ago: Int, _ tokens: Int) -> DayRecord { DayRecord(day: key(ago), tokens: tokens) }
+
+        // Old day outside the log lookback survives; a scanned day is replaced by the scan.
+        let old: [Int32: DayRecord] = [key(100): rec(100, 5), key(2): rec(2, 999)]
+        let merged = StatsEngine.mergeHistory(old, recent: [rec(1, 10), rec(2, 20)], now: now)
+        XCTAssertEqual(merged[key(100)]?.tokens, 5)
+        XCTAssertEqual(merged[key(2)]?.tokens, 20)
+
+        // Today empty, the three days before active, a gap, then a run of four.
+        var h: [Int32: DayRecord] = [:]
+        for ago in [1, 2, 3, 5, 6, 7, 8] { h[key(ago)] = rec(ago, 1) }
+        var stats = TokenStats()
+        StatsEngine.applyHistory(h, to: &stats, now: now)
+        XCTAssertEqual(stats.history.count, StatsEngine.historyDays)
+        XCTAssertEqual(stats.history.last?.day, key(0))
+        XCTAssertEqual(stats.currentStreak, 3)
+        XCTAssertEqual(stats.longestStreak, 4)
+    }
+}

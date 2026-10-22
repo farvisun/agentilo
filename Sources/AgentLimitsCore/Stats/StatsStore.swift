@@ -3,6 +3,8 @@ import Foundation
 public struct DayTotal: Hashable, Sendable, Identifiable {
     public var day: Date
     public var byProvider: [Provider: Int]
+    /// API-price estimate in USD for the models with a known price.
+    public var cost: Double = 0
     public var id: Date { day }
     public var total: Int { byProvider.values.reduce(0, +) }
 }
@@ -11,6 +13,25 @@ public struct ModelTotal: Hashable, Sendable, Identifiable {
     public var model: String
     public var tokens: Int
     public var id: String { model }
+}
+
+public struct ProjectTotal: Hashable, Sendable, Identifiable {
+    public var name: String
+    public var tokens: Int
+    public var id: String { name }
+}
+
+/// One day of activity across all agents, persisted in `daily-history.json`.
+public struct DayRecord: Codable, Hashable, Sendable, Identifiable {
+    /// yyyymmdd.
+    public var day: Int32
+    public var tokens: Int = 0
+    public var cost: Double = 0
+    public var prompts: Int = 0
+    public var tools: Int = 0
+    public var id: Int32 { day }
+
+    public var active: Bool { tokens > 0 || prompts > 0 }
 }
 
 public struct LiveSession: Hashable, Sendable, Identifiable {
@@ -30,6 +51,19 @@ public struct TokenStats: Sendable, Equatable {
     /// Last 30 days, largest first.
     public var models: [ModelTotal] = []
     public var live: [LiveSession] = []
+    /// API-price estimate for today; `todayUnpriced` counts tokens of models without a price.
+    public var todayCost: Double = 0
+    public var todayUnpriced = 0
+    public var todayPrompts = 0
+    public var todayToolCalls = 0
+    /// Session logs with activity today.
+    public var todaySessions = 0
+    /// Today's projects by tokens, largest first.
+    public var todayProjects: [ProjectTotal] = []
+    /// Daily activity, oldest first, ending today; kept beyond the agents' own log retention.
+    public var history: [DayRecord] = []
+    public var currentStreak = 0
+    public var longestStreak = 0
     public var computedAt = Date.distantPast
 
     public init() {}
@@ -43,9 +77,14 @@ public final class StatsEngine: @unchecked Sendable {
 
     public static let lookbackDays = 30
     public static let liveWindow: TimeInterval = 15 * 60
+    /// Days of history the heatmap shows.
+    public static let historyDays = 26 * 7
 
-    public init(cacheURL: URL = Paths.appSupport.appendingPathComponent("stats-cache-v3.json")) {
+    private let historyURL: URL
+
+    public init(cacheURL: URL = Paths.appSupport.appendingPathComponent("stats-cache-v4.json")) {
         self.cacheURL = cacheURL
+        historyURL = cacheURL.deletingLastPathComponent().appendingPathComponent("daily-history.json")
         if let data = try? Data(contentsOf: cacheURL),
            let c = try? JSONDecoder().decode([String: FileAggregate].self, from: data) {
             cache = c
@@ -92,7 +131,57 @@ public final class StatsEngine: @unchecked Sendable {
         let changed = used != previous
         cache = used
         if changed { persist() }
-        return Self.summarize(perFile, now: now)
+        var stats = Self.summarize(perFile, now: now)
+        let stored = loadHistory()
+        let history = Self.mergeHistory(stored, recent: stats.history, now: now)
+        if history != stored { saveHistory(history) }
+        Self.applyHistory(history, to: &stats, now: now)
+        return stats
+    }
+
+    // MARK: History
+
+    /// Days inside the log lookback come from the fresh scan; older days are kept as recorded,
+    /// since agents delete their own logs after a while.
+    static func mergeHistory(_ old: [Int32: DayRecord], recent: [DayRecord], now: Date) -> [Int32: DayRecord] {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: now)
+        let scanned = Set((0..<lookbackDays).map { DayKey.int(cal.date(byAdding: .day, value: -$0, to: start)!) })
+        let oldest = DayKey.int(cal.date(byAdding: .day, value: -(historyDays + 7), to: start)!)
+        var out = old.filter { !scanned.contains($0.key) && $0.key >= oldest }
+        for r in recent where r.active { out[r.day] = r }
+        return out
+    }
+
+    /// Fills the heatmap days and streaks. A streak still counts while today has no activity yet.
+    static func applyHistory(_ history: [Int32: DayRecord], to stats: inout TokenStats, now: Date) {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: now)
+        let days = (0..<historyDays).reversed().map { cal.date(byAdding: .day, value: -$0, to: start)! }
+        stats.history = days.map { history[DayKey.int($0)] ?? DayRecord(day: DayKey.int($0)) }
+
+        var current = 0
+        for (i, d) in stats.history.reversed().enumerated() {
+            if d.active { current += 1 } else if i > 0 { break }
+        }
+        var longest = 0, run = 0
+        for d in stats.history {
+            run = d.active ? run + 1 : 0
+            longest = max(longest, run)
+        }
+        stats.currentStreak = current
+        stats.longestStreak = max(longest, current)
+    }
+
+    private func loadHistory() -> [Int32: DayRecord] {
+        guard let data = try? Data(contentsOf: historyURL),
+              let list = try? JSONDecoder().decode([DayRecord].self, from: data) else { return [:] }
+        return Dictionary(list.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    private func saveHistory(_ h: [Int32: DayRecord]) {
+        guard let data = try? JSONEncoder().encode(h.values.sorted { $0.day < $1.day }) else { return }
+        try? data.write(to: historyURL, options: .atomic)
     }
 
     /// Cost-weighted tokens logged in one home in `(from, to]`, deduplicated. Uses the last scan.
@@ -164,17 +253,42 @@ public final class StatsEngine: @unchecked Sendable {
 
         var stats = TokenStats()
         var dayMap: [Int32: [Provider: Int]] = [:]
+        var costMap: [Int32: Double] = [:]
+        var records: [Int32: DayRecord] = [:]
         var modelMap: [String: Int] = [:]
+        var projectMap: [String: Int] = [:]
         var seen = Set<UInt64>()
+        var seenActivity = Set<UInt64>()
 
         // Oldest file first so a copied message counts once, in its original session.
         let ordered = files.sorted { ($0.agg.firstTimestamp ?? .distantFuture) < ($1.agg.firstTimestamp ?? .distantFuture) }
         for f in ordered {
+            var activeToday = false
             for e in f.agg.entries {
                 if e.k != 0 { guard seen.insert(e.k).inserted else { continue } }
                 dayMap[e.d, default: [:]][f.provider, default: 0] += e.t
+                records[e.d, default: DayRecord(day: e.d)].tokens += e.t
+                if let c = e.c {
+                    costMap[e.d, default: 0] += c
+                    records[e.d, default: DayRecord(day: e.d)].cost += c
+                } else if e.d == todayKey {
+                    stats.todayUnpriced += e.t
+                }
                 if keys30.contains(e.d) { modelMap[f.agg.models[Int(e.m)], default: 0] += e.t }
+                if e.d == todayKey {
+                    activeToday = true
+                    projectMap[f.agg.project ?? "session", default: 0] += e.t
+                }
             }
+            for a in f.agg.activity {
+                if a.k != 0 { guard seenActivity.insert(a.k).inserted else { continue } }
+                switch a.a {
+                case .prompt: records[a.d, default: DayRecord(day: a.d)].prompts += 1
+                case .tool: records[a.d, default: DayRecord(day: a.d)].tools += 1
+                }
+                if a.d == todayKey { activeToday = true }
+            }
+            if activeToday { stats.todaySessions += 1 }
             if let last = f.agg.lastTimestamp, now.timeIntervalSince(last) < liveWindow {
                 stats.live.append(LiveSession(
                     id: f.key, provider: f.provider, project: f.agg.project ?? "session",
@@ -185,7 +299,13 @@ public final class StatsEngine: @unchecked Sendable {
 
         stats.todayByProvider = dayMap[todayKey] ?? [:]
         stats.today = stats.todayByProvider.values.reduce(0, +)
-        stats.days = days7.map { DayTotal(day: $0.1, byProvider: dayMap[$0.0] ?? [:]) }
+        stats.days = days7.map { DayTotal(day: $0.1, byProvider: dayMap[$0.0] ?? [:], cost: costMap[$0.0] ?? 0) }
+        stats.todayCost = costMap[todayKey] ?? 0
+        stats.todayPrompts = records[todayKey]?.prompts ?? 0
+        stats.todayToolCalls = records[todayKey]?.tools ?? 0
+        stats.todayProjects = projectMap.map { ProjectTotal(name: $0.key, tokens: $0.value) }.sorted { $0.tokens > $1.tokens }
+        // The scanned days only; `compute` merges them into the long history.
+        stats.history = records.values.filter { keys30.contains($0.day) }.sorted { $0.day < $1.day }
         stats.models = modelMap.map { ModelTotal(model: $0.key, tokens: $0.value) }.sorted { $0.tokens > $1.tokens }
         stats.live.sort { $0.last > $1.last }
         stats.computedAt = now

@@ -14,6 +14,22 @@ public struct UsageEntry: Codable, Equatable, Sendable {
     public var s: Int64
     /// Cost-weighted tokens (roughly what plan limits meter), used to estimate limits offline.
     public var w: Double
+    /// API list price in USD; nil for models without a known price.
+    public var c: Double?
+}
+
+/// A prompt or a tool call found in a log, for activity counts.
+public struct ActivityEntry: Codable, Equatable, Sendable {
+    public enum Kind: UInt8, Codable, Sendable {
+        case prompt = 0
+        case tool = 1
+    }
+
+    /// Stable hash of the prompt or tool call id; 0 means "never dedupe".
+    public var k: UInt64
+    /// Local day as yyyymmdd.
+    public var d: Int32
+    public var a: Kind
 }
 
 /// `rate_limits` as Codex writes them into `token_count` events.
@@ -36,6 +52,7 @@ public struct FileAggregate: Codable, Equatable, Sendable {
     public var size: Int64 = 0
     public var parsedBytes: Int64 = 0
     public var entries: [UsageEntry] = []
+    public var activity: [ActivityEntry] = []
     public var models: [String] = []
     public var firstTimestamp: Date?
     public var lastTimestamp: Date?
@@ -50,14 +67,20 @@ public struct FileAggregate: Codable, Equatable, Sendable {
 
     public var totalTokens: Int { entries.reduce(0) { $0 + $1.t } }
 
-    mutating func add(_ tokens: Int, weighted: Double, model: String, at date: Date, key: UInt64) {
+    mutating func add(_ tokens: Int, weighted: Double, cost: Double? = nil, model: String, at date: Date, key: UInt64) {
         guard tokens > 0 else { return }
         let mi: Int
         if let i = models.firstIndex(of: model) { mi = i } else { models.append(model); mi = models.count - 1 }
         entries.append(UsageEntry(
             k: key, d: DayKey.int(date), m: Int32(mi), t: tokens,
-            s: Int64(date.timeIntervalSince1970), w: weighted
+            s: Int64(date.timeIntervalSince1970), w: weighted, c: cost
         ))
+        if firstTimestamp == nil || date < firstTimestamp! { firstTimestamp = date }
+        if lastTimestamp == nil || date > lastTimestamp! { lastTimestamp = date }
+    }
+
+    mutating func addActivity(_ kind: ActivityEntry.Kind, id: String?, at date: Date) {
+        activity.append(ActivityEntry(k: id.map(FNV.hash) ?? 0, d: DayKey.int(date), a: kind))
         if firstTimestamp == nil || date < firstTimestamp! { firstTimestamp = date }
         if lastTimestamp == nil || date > lastTimestamp! { lastTimestamp = date }
     }
@@ -118,12 +141,23 @@ enum LogLines {
 public enum ClaudeLogParser {
     public static func parse(_ data: Data, into agg: inout FileAggregate) -> Int {
         var seen = Set(agg.entries.lazy.map(\.k).filter { $0 != 0 })
-        return LogLines.forEach(in: data, markers: ["\"usage\""]) { obj in
-            guard let msg = J.dict(obj["message"]), let usage = J.dict(msg["usage"]),
-                  let date = DateParsing.iso(J.string(obj["timestamp"])) else { return }
+        var seenActivity = Set(agg.activity.lazy.map(\.k).filter { $0 != 0 })
+        return LogLines.forEach(in: data, markers: ["\"usage\"", "\"promptId\""]) { obj in
+            guard let msg = J.dict(obj["message"]), let date = DateParsing.iso(J.string(obj["timestamp"])) else { return }
             if agg.project == nil, let cwd = J.string(obj["cwd"]) {
                 agg.project = (cwd as NSString).lastPathComponent
             }
+            // Typed prompts carry a promptId; tool results and command output do not.
+            if J.string(obj["type"]) == "user", let pid = J.string(obj["promptId"]),
+               (obj["isSidechain"] as? Bool) != true, seenActivity.insert(FNV.hash(pid)).inserted {
+                agg.addActivity(.prompt, id: pid, at: date)
+            }
+            // A response is written one content block per line, all lines sharing the message id.
+            for block in (msg["content"] as? [[String: Any]]) ?? [] where J.string(block["type"]) == "tool_use" {
+                guard let id = J.string(block["id"]), seenActivity.insert(FNV.hash(id)).inserted else { continue }
+                agg.addActivity(.tool, id: id, at: date)
+            }
+            guard let usage = J.dict(msg["usage"]) else { return }
             let model = J.string(msg["model"]) ?? "unknown"
             guard model != "<synthetic>" else { return }
             var key: UInt64 = 0
@@ -137,6 +171,7 @@ public enum ClaudeLogParser {
             let read = J.double(usage["cache_read_input_tokens"]) ?? 0
             let total = Int(input + output + write + read)
             agg.add(total, weighted: weight(model: model, input: input, output: output, cacheWrite: write, cacheRead: read),
+                    cost: Pricing.cost(model: model, input: input, output: output, cacheWrite: write, cacheRead: read),
                     model: model, at: date, key: key)
         }
     }
@@ -159,9 +194,17 @@ public enum ClaudeLogParser {
 /// session total, so each event contributes its delta (robust to repeated events).
 public enum CodexLogParser {
     public static func parse(_ data: Data, into agg: inout FileAggregate) -> Int {
-        LogLines.forEach(in: data, markers: ["\"token_count\"", "\"turn_context\"", "\"session_meta\""]) { obj in
+        LogLines.forEach(in: data, markers: [
+            "\"token_count\"", "\"turn_context\"", "\"session_meta\"", "\"task_started\"", "_call\"",
+        ]) { obj in
             let payload = J.dict(obj["payload"]) ?? [:]
             switch J.string(obj["type"]) {
+            case "response_item" where ["function_call", "custom_tool_call", "local_shell_call"].contains(J.string(payload["type"]) ?? ""):
+                if let date = DateParsing.iso(J.string(obj["timestamp"])) {
+                    agg.addActivity(.tool, id: J.string(payload["call_id"]), at: date)
+                }
+            case "event_msg" where J.string(payload["type"]) == "task_started":
+                if let date = DateParsing.iso(J.string(obj["timestamp"])) { agg.addActivity(.prompt, id: nil, at: date) }
             case "session_meta":
                 if let cwd = J.string(payload["cwd"]) { agg.project = (cwd as NSString).lastPathComponent }
             case "turn_context":

@@ -27,6 +27,8 @@ struct ExpandedView: View {
                         .id(acct.id)
                 case .stats:
                     StatsPage(stats: state.stats)
+                case .activity:
+                    ActivityPage(stats: state.stats)
                 }
             }
             .padding(.horizontal, 18)
@@ -253,7 +255,9 @@ struct StatsPage: View {
                 Text("Today").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
                 Text(Formatters.compactTokens(stats.today))
                     .font(.system(size: 26, weight: .bold, design: .rounded).monospacedDigit())
-                Text("tokens").font(.system(size: 10)).foregroundStyle(Palette.tertiary)
+                Text("tokens · ≈ \(String(format: "$%.2f", stats.todayCost))")
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundStyle(Palette.tertiary)
                 ForEach(Provider.allCases.filter { (stats.todayByProvider[$0] ?? 0) > 0 }) { p in
                     HStack(spacing: 5) {
                         Circle().fill(p.tint).frame(width: 6, height: 6)
