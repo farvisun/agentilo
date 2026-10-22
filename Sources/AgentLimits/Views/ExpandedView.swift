@@ -13,16 +13,19 @@ struct ExpandedView: View {
                 .frame(height: l.notchHeight)
 
             Group {
-                if state.pageCount == 0 {
+                let pages = state.pages
+                switch pages.isEmpty ? nil : pages[min(state.page, pages.count - 1)] {
+                case nil:
                     EmptyPage(openSettings: openSettings)
-                } else if state.page < state.limitAccounts.count {
-                    let acct = state.limitAccounts[state.page]
+                case .agents:
+                    AgentsPage(state: state)
+                case .account(let acct):
                     AccountPage(
                         account: acct, status: state.status(acct), stats: state.stats,
                         mode: state.settings.displayMode, now: state.now
                     )
                         .id(acct.id)
-                } else {
+                case .stats:
                     StatsPage(stats: state.stats)
                 }
             }

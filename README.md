@@ -6,6 +6,7 @@ Notch app for macOS 14+ that shows Claude Code, Codex and Cursor plan limits bes
 - **Hover**: notch expands with session/weekly meters, reset times, pace ("On track", "Ahead of pace", "Runs out 7:24 PM"), live session row. Scroll or use arrows to page through accounts and the token stats page.
 - **Alerts**: drop down out of the notch at 75%, 90% and 100% of a window (with the projected run-out time) and when a window resets. Optional sound. Settings → Alerts.
 - **Local API + CLI**: `GET http://127.0.0.1:6737/v1/limits` (loopback only, refuses browser pages, no credentials) and `agentlimits limits [--json|--short] [--force]` for scripts and status lines; falls back to cached numbers when the app is not running. Install the command in Settings → Agents.
+- **Agents**: live list of running agents (working, waiting for approval or input, done) with the current tool and task, from [herdr](https://herdr.dev) and/or Claude Code / Codex hooks. A pulsing dot on the pill and a drop-down alert when an agent needs you or finishes a longer turn; click a row to jump to its herdr pane in Ghostty. Install hooks per home in Settings → Agents (commands marked `# agentlimits`, other hooks untouched, original kept as `*.agentlimits-bak`).
 - **Accounts**: every agent home is its own account (`~/.claude`, `~/.claude_multi/*`, `~/.codex*`, Cursor). Auto-detected on first launch; edit in Settings → Accounts.
 - **Proxy**: global System / None / HTTP / HTTPS / SOCKS5 with optional auth (password in Keychain), plus per-provider override and a connection test.
 

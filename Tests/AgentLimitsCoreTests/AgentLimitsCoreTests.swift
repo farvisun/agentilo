@@ -371,3 +371,144 @@ final class LocalAPITests: XCTestCase {
         XCTAssertEqual((denied as? HTTPURLResponse)?.statusCode, 403)
     }
 }
+
+final class AgentSessionTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 3_000_000)
+    let pane = HerdrLocation(pane: "w:p1", tab: "w:t1", workspace: "w")
+
+    private func event(_ kind: AgentEventKind, at: TimeInterval, herdr: HerdrLocation? = nil, type: String? = nil) -> AgentEvent {
+        AgentEvent(agent: "claude", kind: kind, sessionID: "s1", cwd: "/p/web", tool: kind == .preTool ? "Bash" : nil,
+                   notificationType: type, herdr: herdr, at: t0.addingTimeInterval(at))
+    }
+
+    private func herdr(_ status: HerdrAgent.Status, sessionID: String? = "s1") -> HerdrAgent {
+        HerdrAgent(agent: "claude", status: status, sessionID: sessionID, cwd: "/p/web", title: "task", focused: false, location: pane)
+    }
+
+    func testHookLifecycle() {
+        var store = AgentSessionStore()
+        store.apply(event(.sessionStart, at: 0))
+        store.apply(event(.prompt, at: 1))
+        store.apply(event(.preTool, at: 2))
+        let s = store.sessions["claude:s1"]!
+        XCTAssertEqual(s.state, .working)
+        XCTAssertEqual(s.tool, "Bash")
+        XCTAssertEqual(s.project, "web")
+
+        let ask = store.apply(event(.notification, at: 3, type: "permission_prompt"))
+        XCTAssertEqual(ask.first?.to, .waitingPermission)
+        XCTAssertEqual(store.attentionCount, 1)
+        let done = store.apply(event(.stop, at: 60))
+        XCTAssertEqual(done.first?.to, .done)
+        store.apply(event(.sessionEnd, at: 61))
+        XCTAssertTrue(store.sessions.isEmpty)
+    }
+
+    func testHerdrDrivesStateAndAdoptsHookSession() {
+        var store = AgentSessionStore()
+        store.apply(event(.prompt, at: 0))
+        XCTAssertNotNil(store.sessions["claude:s1"])
+        // herdr lists the same session id in a pane: one session, keyed by the pane.
+        store.applyHerdr([herdr(.working)], now: t0.addingTimeInterval(10))
+        XCTAssertEqual(Array(store.sessions.keys), ["herdr:w:p1"])
+        XCTAssertEqual(store.sessions["herdr:w:p1"]?.title, "task")
+
+        let blocked = store.applyHerdr([herdr(.blocked)], now: t0.addingTimeInterval(20))
+        XCTAssertEqual(blocked.first?.to, .waitingPermission)
+        let idle = store.applyHerdr([herdr(.idle)], now: t0.addingTimeInterval(30))
+        XCTAssertEqual(idle.first?.to, .done)
+
+        // Pane gone: session gone.
+        store.applyHerdr([], now: t0.addingTimeInterval(60))
+        XCTAssertTrue(store.sessions.isEmpty)
+    }
+
+    func testFreshHookWinsOverHerdr() {
+        var store = AgentSessionStore()
+        store.applyHerdr([herdr(.working)], now: t0)
+        store.apply(event(.notification, at: 1, herdr: pane, type: "idle_prompt"))
+        // herdr still reads the screen as working a moment later; the hook knows better.
+        store.applyHerdr([herdr(.working)], now: t0.addingTimeInterval(2))
+        XCTAssertEqual(store.sessions["herdr:w:p1"]?.state, .waitingInput)
+    }
+
+    func testFirstSightingIsNotATransitionToDone() {
+        var store = AgentSessionStore()
+        let t = store.applyHerdr([herdr(.idle)], now: t0)
+        XCTAssertNil(t.first?.from)
+        XCTAssertEqual(store.sessions.values.first?.state, .idle)
+    }
+
+    func testParsesHerdrList() throws {
+        let agents = try XCTUnwrap(HerdrSource.parse(try fixture("herdr_agents.json")))
+        XCTAssertEqual(agents.count, 2)
+        XCTAssertEqual(agents[0].status, .idle)
+        XCTAssertEqual(agents[0].sessionID, "19eaaa41-a3ee-4050-911f-eaf3060bceaa")
+        XCTAssertEqual(agents[0].title, "ui-polish")
+        XCTAssertEqual(agents[1].status, .blocked)
+        XCTAssertNil(agents[1].title)
+        XCTAssertTrue(agents[1].focused)
+        XCTAssertEqual(agents[1].location, HerdrLocation(pane: "wP:p4F", tab: "wP:t2A", workspace: "wP"))
+    }
+
+    func testEventFromHookInput() {
+        let e = AgentEvent.from(
+            hookInput: ["session_id": "abc", "cwd": "/x/api", "tool_name": "Bash",
+                        "tool_input": ["command": "npm test\necho done"]],
+            agent: "claude", kind: .preTool, environment: ["HERDR_PANE_ID": "w:p9", "HERDR_TAB_ID": "w:t1"]
+        )
+        XCTAssertEqual(e.detail, "npm test")
+        XCTAssertEqual(e.herdr?.pane, "w:p9")
+        XCTAssertEqual(AgentEvent.toolSummary(tool: "Edit", input: ["file_path": "/a/b/AppState.swift"]), "AppState.swift")
+    }
+}
+
+final class HookInstallerTests: XCTestCase {
+    let exe = "/Applications/AgentLimits.app/Contents/MacOS/AgentLimits"
+
+    private func tempHome(_ settings: String?) throws -> Account {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let settings { try settings.write(to: dir.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8) }
+        return Account(provider: .claude, homePath: dir.path, label: "t")
+    }
+
+    func testInstallKeepsOtherHooksAndRemovesCleanly() throws {
+        let original = #"{"model":"opus","hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"atuin hook claude"}]}]}}"#
+        let acct = try tempHome(original)
+        let url = HookInstaller.configURL(for: acct)!
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: exe, approvals: false), .notInstalled)
+
+        try HookInstaller.install(for: acct, executable: exe, approvals: false, approvalTimeout: 60)
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: exe, approvals: false), .installed)
+        // Installing twice does not duplicate.
+        try HookInstaller.install(for: acct, executable: exe, approvals: false, approvalTimeout: 60)
+        let root = try HookInstaller.read(url)
+        XCTAssertEqual(root["model"] as? String, "opus")
+        let pre = try XCTUnwrap((root["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]])
+        XCTAssertEqual(pre.count, 2)
+        XCTAssertEqual(HookInstaller.commands(in: root).count, HookInstaller.events(for: .claude, approvals: false).count)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path + ".agentlimits-bak"))
+
+        // Another copy of the app, or approvals turned on: outdated.
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: "/tmp/Other", approvals: false), .outdated)
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: exe, approvals: true), .outdated)
+
+        try HookInstaller.uninstall(for: acct)
+        let after = try HookInstaller.read(url)
+        let expected = try JSONSerialization.jsonObject(with: Data(original.utf8)) as! NSDictionary
+        XCTAssertEqual(after as NSDictionary, expected)
+    }
+
+    func testInstallIntoMissingFileAndRemoveEmptiesHooks() throws {
+        let acct = try tempHome(nil)
+        try HookInstaller.install(for: acct, executable: exe, approvals: true, approvalTimeout: 60)
+        let root = try HookInstaller.read(HookInstaller.configURL(for: acct)!)
+        let perm = try XCTUnwrap((root["hooks"] as? [String: Any])?["PermissionRequest"] as? [[String: Any]])
+        let hook = try XCTUnwrap((perm.first?["hooks"] as? [[String: Any]])?.first)
+        XCTAssertEqual(hook["timeout"] as? Int, 70)
+        XCTAssertEqual(hook["command"] as? String, "'\(exe)' hook claude permission # agentlimits")
+        try HookInstaller.uninstall(for: acct)
+        XCTAssertTrue(try HookInstaller.read(HookInstaller.configURL(for: acct)!).isEmpty)
+    }
+}

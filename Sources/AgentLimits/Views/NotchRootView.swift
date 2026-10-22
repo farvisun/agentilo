@@ -93,6 +93,28 @@ struct PillView: View {
             }
         }
         .frame(height: l.notchHeight)
+        .overlay(alignment: .topLeading) {
+            if state.agents.attentionCount > 0 {
+                AttentionDot()
+                    .padding(.leading, 11)
+                    .padding(.top, 5)
+            }
+        }
+    }
+}
+
+/// An agent is waiting on the user.
+private struct AttentionDot: View {
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(Palette.amber)
+            .frame(width: 6, height: 6)
+            .scaleEffect(pulse ? 1.25 : 0.8)
+            .opacity(pulse ? 1 : 0.55)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: pulse)
+            .onAppear { pulse = true }
     }
 }
 

@@ -13,6 +13,8 @@ if cliArgs.contains("--dump") {
 switch cliArgs.first {
 case "limits":
     exit(await LimitsCommand.run(Array(cliArgs.dropFirst())))
+case "hook":
+    exit(await HookCommand.run(Array(cliArgs.dropFirst())))
 case "help", "-h", "--help":
     print("""
     usage: agentlimits <command>

@@ -46,6 +46,7 @@ final class AppState {
     var page = 0
     var now = Date()
     let alerts = AlertCenter()
+    var agents = AgentSessionStore()
 
     var notchMode: NotchMode { expanded ? .expanded : (alerts.current != nil ? .alert : .collapsed) }
 
@@ -63,6 +64,8 @@ final class AppState {
     @ObservationIgnored private var failures: [UUID: Int] = [:]
     @ObservationIgnored private var notBefore: [UUID: Date] = [:]
     @ObservationIgnored private var lastFetch: [UUID: Date] = [:]
+    @ObservationIgnored var agentLoop: Task<Void, Never>?
+    @ObservationIgnored let hookToken = HookToken.ensure()
 
     init() {
         var s = SettingsStore.load()
@@ -85,7 +88,13 @@ final class AppState {
     /// Accounts shown as pages in the expanded notch.
     var limitAccounts: [Account] { settings.accounts.filter { $0.enabled && $0.trackLimits } }
 
-    var pageCount: Int { limitAccounts.count + (settings.showTokenStats ? 1 : 0) }
+    /// Pages of the expanded notch, in order.
+    var pages: [NotchPage] {
+        (agents.sessions.isEmpty ? [] : [.agents]) + limitAccounts.map { .account($0) }
+            + (settings.showTokenStats ? [.stats] : [])
+    }
+
+    var pageCount: Int { pages.count }
 
     /// The account and window closest to trouble: worst pace first, then highest usage.
     var critical: (account: Account, window: UsageWindow)? { critical(provider: nil) }
@@ -134,6 +143,7 @@ final class AppState {
     func start() {
         startLoop()
         startServer()
+        startAgents()
         refreshStats()
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -162,6 +172,8 @@ final class AppState {
     /// Called when the notch opens: fetch anything older than a minute.
     func expandedRefresh() {
         now = Date()
+        // Open on the agents when one is waiting.
+        if agents.attentionCount > 0 { page = 0 }
         for acct in limitAccounts where Date().timeIntervalSince(lastFetch[acct.id] ?? .distantPast) > 60 {
             refresh(acct, force: false)
         }
@@ -311,7 +323,14 @@ final class AppState {
                 }
             }
             return .json(limitsPayload())
-        case (_, "/v1/health"), (_, "/v1/limits"):
+        case ("POST", "/v1/events"):
+            guard req.headers[HookToken.header] == hookToken else { return .error(401, "bad token") }
+            guard let event = try? APIJSON.decoder.decode(AgentEvent.self, from: req.body) else {
+                return .error(400, "bad event")
+            }
+            receive(event)
+            return .json(["ok": true])
+        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"):
             return .error(405, "method not allowed")
         default:
             return .error(404, "not found")

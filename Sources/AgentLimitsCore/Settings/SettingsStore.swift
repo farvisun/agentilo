@@ -105,6 +105,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var apiPort = 6737
     /// Put account labels (often emails) in API output.
     public var apiIncludeLabels = false
+    /// Read agent state from herdr when it is installed.
+    public var herdrEnabled = true
+    /// Alert when an agent waits for an answer or an approval.
+    public var agentAttentionAlerts = true
+    /// Alert when an agent finishes a turn that took a while.
+    public var agentDoneAlerts = true
 
     public init() {}
 
@@ -130,6 +136,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         apiEnabled = try c.decodeIfPresent(Bool.self, forKey: .apiEnabled) ?? d.apiEnabled
         apiPort = try c.decodeIfPresent(Int.self, forKey: .apiPort) ?? d.apiPort
         apiIncludeLabels = try c.decodeIfPresent(Bool.self, forKey: .apiIncludeLabels) ?? d.apiIncludeLabels
+        herdrEnabled = try c.decodeIfPresent(Bool.self, forKey: .herdrEnabled) ?? d.herdrEnabled
+        agentAttentionAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentAttentionAlerts) ?? d.agentAttentionAlerts
+        agentDoneAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentDoneAlerts) ?? d.agentDoneAlerts
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {
