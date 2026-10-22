@@ -36,6 +36,10 @@ struct GeneralTab: View {
                 ForEach(UsageDisplay.allCases) { Text($0.displayName).tag($0) }
             }
             .pickerStyle(.segmented)
+            Picker("Expand notch on", selection: $state.settings.expandTrigger) {
+                ForEach(ExpandTrigger.allCases) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
             Picker("Collapsed notch shows", selection: $state.settings.pillMode) {
                 ForEach(PillMode.allCases) { Text($0.displayName).tag($0) }
             }

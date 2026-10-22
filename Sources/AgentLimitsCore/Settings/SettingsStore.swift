@@ -33,6 +33,15 @@ public enum PillMode: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// What opens the expanded notch.
+public enum ExpandTrigger: String, Codable, CaseIterable, Sendable, Identifiable {
+    case hover
+    case click
+
+    public var id: String { rawValue }
+    public var displayName: String { self == .hover ? "Hover" : "Click" }
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
     public var accounts: [Account] = []
     /// Seconds between limit refreshes.
@@ -45,6 +54,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var displayMode = UsageDisplay.used
     public var pillMode = PillMode.mostCritical
     public var pinnedAccount: UUID?
+    public var expandTrigger = ExpandTrigger.hover
 
     public init() {}
 
@@ -60,6 +70,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         displayMode = try c.decodeIfPresent(UsageDisplay.self, forKey: .displayMode) ?? d.displayMode
         pillMode = try c.decodeIfPresent(PillMode.self, forKey: .pillMode) ?? d.pillMode
         pinnedAccount = try c.decodeIfPresent(UUID.self, forKey: .pinnedAccount)
+        expandTrigger = try c.decodeIfPresent(ExpandTrigger.self, forKey: .expandTrigger) ?? d.expandTrigger
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {

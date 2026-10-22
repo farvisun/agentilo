@@ -10,10 +10,12 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// Owns the transparent panel at the top of the screen and drives hover expand/collapse.
+/// Owns the transparent panel at the top of the screen and drives expand/collapse,
+/// on hover or on click depending on settings.
 ///
 /// The panel is fixed-size and click-through while collapsed, so it never blocks the menu bar;
-/// hover is detected by polling the cursor against the visible shape.
+/// hover is detected by polling the cursor against the visible shape. In click mode the panel
+/// only takes mouse events while the cursor is over the pill, and a click elsewhere collapses it.
 @MainActor
 final class NotchWindowController {
     private let state: AppState
@@ -21,6 +23,8 @@ final class NotchWindowController {
     private var screen: NSScreen?
     private var pollTimer: Timer?
     private var scrollMonitor: Any?
+    private var localClickMonitor: Any?
+    private var globalClickMonitor: Any?
     private var outsideSince: Date?
     private var insideSince: Date?
     private var scrollAccumulator: CGFloat = 0
@@ -66,6 +70,14 @@ final class NotchWindowController {
             MainActor.assumeIsolated { self?.handleScroll(event) }
             return event
         }
+        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            let swallow = MainActor.assumeIsolated { self?.handleClick() ?? false }
+            return swallow ? nil : event
+        }
+        // Clicks in other apps never reach the local monitor; they mean "outside".
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated { self?.collapseOnOutsideClick() }
+        }
     }
 
     func reposition() {
@@ -82,10 +94,14 @@ final class NotchWindowController {
             setExpanded(true)
             return
         }
-        let mouse = NSEvent.mouseLocation
-        let rect = NotchGeometry.hotRect(on: screen, layout: state.layout, expanded: state.expanded)
-        // A little slack so the edge of the shape does not flicker.
-        let inside = rect.insetBy(dx: -4, dy: -4).contains(mouse)
+        let inside = isInside(NSEvent.mouseLocation, screen: screen)
+        if state.settings.expandTrigger == .click {
+            insideSince = nil
+            outsideSince = nil
+            // Catch clicks on the pill only; elsewhere the menu bar stays usable.
+            if !state.expanded { panel.ignoresMouseEvents = !inside }
+            return
+        }
         let now = Date()
 
         if inside {
@@ -101,6 +117,31 @@ final class NotchWindowController {
                 if now.timeIntervalSince(outsideSince!) > 0.35 { setExpanded(false) }
             }
         }
+    }
+
+    private func isInside(_ point: NSPoint, screen: NSScreen) -> Bool {
+        let rect = NotchGeometry.hotRect(on: screen, layout: state.layout, expanded: state.expanded)
+        // A little slack so the edge of the shape does not flicker.
+        return rect.insetBy(dx: -4, dy: -4).contains(point)
+    }
+
+    /// Click mode: a click on the pill expands; a click outside the shape collapses.
+    /// Returns true when the click was used to expand and should not reach the views.
+    private func handleClick() -> Bool {
+        guard state.settings.expandTrigger == .click, let screen else { return false }
+        let inside = isInside(NSEvent.mouseLocation, screen: screen)
+        if !state.expanded, inside {
+            setExpanded(true)
+            return true
+        }
+        if state.expanded, !inside { setExpanded(false) }
+        return false
+    }
+
+    private func collapseOnOutsideClick() {
+        guard state.settings.expandTrigger == .click, state.expanded,
+              !CommandLine.arguments.contains("--preview-expanded") else { return }
+        setExpanded(false)
     }
 
     private func setExpanded(_ value: Bool) {
