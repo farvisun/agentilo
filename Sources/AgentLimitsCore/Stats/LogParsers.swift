@@ -1,0 +1,204 @@
+import Foundation
+
+/// One billed model response found in a log.
+public struct UsageEntry: Codable, Equatable, Sendable {
+    /// Stable hash of the message id; 0 means "never dedupe".
+    public var k: UInt64
+    /// Local day as yyyymmdd.
+    public var d: Int32
+    /// Index into `FileAggregate.models`.
+    public var m: Int32
+    /// Total tokens.
+    public var t: Int
+    /// Unix seconds of the response.
+    public var s: Int64
+    /// Cost-weighted tokens (roughly what plan limits meter), used to estimate limits offline.
+    public var w: Double
+}
+
+/// `rate_limits` as Codex writes them into `token_count` events.
+public struct RateLimitSample: Codable, Equatable, Sendable {
+    public struct Window: Codable, Equatable, Sendable {
+        public var usedPercent: Double
+        public var windowMinutes: Double?
+        public var resetsAt: Date?
+    }
+
+    public var at: Date
+    public var primary: Window?
+    public var secondary: Window?
+    public var planType: String?
+}
+
+/// Parsed state of one session log. Logs are append-only, so parsing resumes at `parsedBytes`.
+public struct FileAggregate: Codable, Equatable, Sendable {
+    public var mtime: Double = 0
+    public var size: Int64 = 0
+    public var parsedBytes: Int64 = 0
+    public var entries: [UsageEntry] = []
+    public var models: [String] = []
+    public var firstTimestamp: Date?
+    public var lastTimestamp: Date?
+    public var project: String?
+    /// Codex: running session total seen so far, to turn cumulative counts into deltas.
+    public var codexLastTotal = 0
+    public var codexModel: String?
+    /// Codex: most recent rate-limit sample in this file.
+    public var rateLimits: RateLimitSample?
+
+    public init() {}
+
+    public var totalTokens: Int { entries.reduce(0) { $0 + $1.t } }
+
+    mutating func add(_ tokens: Int, weighted: Double, model: String, at date: Date, key: UInt64) {
+        guard tokens > 0 else { return }
+        let mi: Int
+        if let i = models.firstIndex(of: model) { mi = i } else { models.append(model); mi = models.count - 1 }
+        entries.append(UsageEntry(
+            k: key, d: DayKey.int(date), m: Int32(mi), t: tokens,
+            s: Int64(date.timeIntervalSince1970), w: weighted
+        ))
+        if firstTimestamp == nil || date < firstTimestamp! { firstTimestamp = date }
+        if lastTimestamp == nil || date > lastTimestamp! { lastTimestamp = date }
+    }
+}
+
+public enum DayKey {
+    public static func string(_ date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    public static func int(_ date: Date, calendar: Calendar = .current) -> Int32 {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return Int32((c.year ?? 0) * 10_000 + (c.month ?? 0) * 100 + (c.day ?? 0))
+    }
+}
+
+enum FNV {
+    static func hash(_ s: String) -> UInt64 {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for b in s.utf8 {
+            h ^= UInt64(b)
+            h = h &* 0x100_0000_01b3
+        }
+        return h == 0 ? 1 : h
+    }
+}
+
+enum LogLines {
+    /// Calls `body` for each complete line containing any marker, parsed as JSON.
+    /// Returns the number of bytes consumed (up to and including the last newline).
+    @discardableResult
+    static func forEach(in data: Data, markers: [String], _ body: ([String: Any]) -> Void) -> Int {
+        let needles = markers.map { Array($0.utf8) }
+        return data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Int in
+            guard let base = raw.baseAddress else { return 0 }
+            let count = raw.count
+            var start = 0
+            while start < count {
+                guard let nl = memchr(base + start, 0x0A, count - start) else { break }
+                let end = base.distance(to: UnsafeRawPointer(nl))
+                let len = end - start
+                if len > 0, needles.contains(where: { n in
+                    n.withUnsafeBytes { memmem(base + start, len, $0.baseAddress, n.count) != nil }
+                }) {
+                    let line = Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base + start), count: len, deallocator: .none)
+                    if let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any] { body(obj) }
+                }
+                start = end + 1
+            }
+            return start
+        }
+    }
+}
+
+/// Claude Code: `<home>/projects/<project>/<session>.jsonl`. Streaming writes a message several
+/// times and resumed sessions copy history into new files, so entries carry a dedupe key.
+public enum ClaudeLogParser {
+    public static func parse(_ data: Data, into agg: inout FileAggregate) -> Int {
+        var seen = Set(agg.entries.lazy.map(\.k).filter { $0 != 0 })
+        return LogLines.forEach(in: data, markers: ["\"usage\""]) { obj in
+            guard let msg = J.dict(obj["message"]), let usage = J.dict(msg["usage"]),
+                  let date = DateParsing.iso(J.string(obj["timestamp"])) else { return }
+            if agg.project == nil, let cwd = J.string(obj["cwd"]) {
+                agg.project = (cwd as NSString).lastPathComponent
+            }
+            let model = J.string(msg["model"]) ?? "unknown"
+            guard model != "<synthetic>" else { return }
+            var key: UInt64 = 0
+            if let id = J.string(msg["id"]) {
+                key = FNV.hash("\(id):\(J.string(obj["requestId"]) ?? "")")
+                guard seen.insert(key).inserted else { return }
+            }
+            let input = J.double(usage["input_tokens"]) ?? 0
+            let output = J.double(usage["output_tokens"]) ?? 0
+            let write = J.double(usage["cache_creation_input_tokens"]) ?? 0
+            let read = J.double(usage["cache_read_input_tokens"]) ?? 0
+            let total = Int(input + output + write + read)
+            agg.add(total, weighted: weight(model: model, input: input, output: output, cacheWrite: write, cacheRead: read),
+                    model: model, at: date, key: key)
+        }
+    }
+
+    public static func parse(_ data: Data) -> FileAggregate {
+        var agg = FileAggregate()
+        _ = parse(data, into: &agg)
+        return agg
+    }
+
+    /// Relative API price in input-token units; plan limits roughly track cost.
+    static func weight(model: String, input: Double, output: Double, cacheWrite: Double, cacheRead: Double) -> Double {
+        let m = model.lowercased()
+        let tier = m.contains("haiku") ? 0.2 : m.contains("sonnet") ? 0.6 : 1.0
+        return tier * (input + output * 5 + cacheWrite * 1.25 + cacheRead * 0.1)
+    }
+}
+
+/// Codex: `<home>/sessions/YYYY/MM/DD/rollout-*.jsonl`. `token_count` events carry a running
+/// session total, so each event contributes its delta (robust to repeated events).
+public enum CodexLogParser {
+    public static func parse(_ data: Data, into agg: inout FileAggregate) -> Int {
+        LogLines.forEach(in: data, markers: ["\"token_count\"", "\"turn_context\"", "\"session_meta\""]) { obj in
+            let payload = J.dict(obj["payload"]) ?? [:]
+            switch J.string(obj["type"]) {
+            case "session_meta":
+                if let cwd = J.string(payload["cwd"]) { agg.project = (cwd as NSString).lastPathComponent }
+            case "turn_context":
+                if let m = J.string(payload["model"]) { agg.codexModel = m }
+            case "event_msg" where J.string(payload["type"]) == "token_count":
+                if let sample = rateLimits(J.dict(payload["rate_limits"]), at: DateParsing.iso(J.string(obj["timestamp"]))) {
+                    agg.rateLimits = sample
+                }
+                guard let info = J.dict(payload["info"]),
+                      let usage = J.dict(info["total_token_usage"]),
+                      let total = J.double(usage["total_tokens"]).map(Int.init),
+                      let date = DateParsing.iso(J.string(obj["timestamp"])) else { return }
+                let delta = total >= agg.codexLastTotal ? total - agg.codexLastTotal : total
+                agg.codexLastTotal = total
+                agg.add(delta, weighted: Double(delta), model: agg.codexModel ?? "unknown", at: date, key: 0)
+            default:
+                break
+            }
+        }
+    }
+
+    public static func parse(_ data: Data) -> FileAggregate {
+        var agg = FileAggregate()
+        _ = parse(data, into: &agg)
+        return agg
+    }
+
+    static func rateLimits(_ rl: [String: Any]?, at date: Date?) -> RateLimitSample? {
+        guard let rl, let date else { return nil }
+        func window(_ v: Any?) -> RateLimitSample.Window? {
+            guard let w = J.dict(v), let pct = J.double(w["used_percent"]) else { return nil }
+            var reset = J.double(w["resets_at"]).map { Date(timeIntervalSince1970: $0) }
+            if reset == nil, let after = J.double(w["resets_in_seconds"]) { reset = date.addingTimeInterval(after) }
+            return .init(usedPercent: pct, windowMinutes: J.double(w["window_minutes"]), resetsAt: reset)
+        }
+        let primary = window(rl["primary"]), secondary = window(rl["secondary"])
+        guard primary != nil || secondary != nil else { return nil }
+        return RateLimitSample(at: date, primary: primary, secondary: secondary, planType: J.string(rl["plan_type"]))
+    }
+}
