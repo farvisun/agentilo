@@ -106,7 +106,10 @@ final class NotchWindowController {
         let fullscreen = FullscreenDetector.isFullscreen(screen)
         guard fullscreen != hiddenForFullscreen else { return }
         hiddenForFullscreen = fullscreen
+        state.notchHidden = fullscreen
         state.alerts.hold(.fullscreen, fullscreen)
+        // A prompt nobody can see goes back to the terminal.
+        if fullscreen { for p in state.approvals { state.resolveApproval(p.id, .none) } }
         if fullscreen {
             state.expanded = false
             panel.ignoresMouseEvents = true
@@ -124,6 +127,13 @@ final class NotchWindowController {
             return
         }
         let inside = isInside(NSEvent.mouseLocation, screen: screen)
+        if state.notchMode == .approval {
+            // The card takes clicks wherever it is drawn, in either trigger mode, and never expands.
+            insideSince = nil
+            outsideSince = nil
+            panel.ignoresMouseEvents = !inside
+            return
+        }
         if state.settings.expandTrigger == .click {
             insideSince = nil
             outsideSince = nil
@@ -157,7 +167,9 @@ final class NotchWindowController {
     /// Click mode: a click on the pill expands; a click outside the shape collapses.
     /// Returns true when the click was used to expand and should not reach the views.
     private func handleClick() -> Bool {
-        guard state.settings.expandTrigger == .click, let screen, !hiddenForFullscreen else { return false }
+        guard state.settings.expandTrigger == .click, state.notchMode != .approval, let screen, !hiddenForFullscreen else {
+            return false
+        }
         let inside = isInside(NSEvent.mouseLocation, screen: screen)
         if !state.expanded, inside {
             setExpanded(true)
@@ -168,7 +180,7 @@ final class NotchWindowController {
     }
 
     private func collapseOnOutsideClick() {
-        guard state.settings.expandTrigger == .click, state.expanded,
+        guard state.settings.expandTrigger == .click, state.expanded, state.notchMode != .approval,
               !CommandLine.arguments.contains("--preview-expanded") else { return }
         setExpanded(false)
     }

@@ -22,13 +22,28 @@ struct AgentsTab: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Approvals") {
+                Toggle("Answer Claude Code permission prompts from the notch", isOn: $state.settings.approvalsEnabled)
+                Picker("Hand back to the terminal after", selection: $state.settings.approvalTimeout) {
+                    ForEach([15, 30, 60, 120], id: \.self) { Text("\($0) seconds").tag($0) }
+                }
+                .disabled(!state.settings.approvalsEnabled)
+                Text("Claude Code waits for the notch before it shows its own prompt, so an unanswered card delays the terminal by this long. \"Terminal\" on the card or a focused herdr pane skips the card. After changing this, update the Claude hooks below.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Hooks") {
                 let accounts = state.settings.accounts.filter { $0.enabled && $0.provider != .cursor }
                 if accounts.isEmpty {
                     Text("No Claude Code or Codex homes configured.").foregroundStyle(.secondary)
                 }
                 ForEach(accounts) { acct in
-                    HookRow(account: acct, executable: CLIInstaller.executablePath, revision: hookRevision) {
+                    HookRow(
+                        account: acct, executable: CLIInstaller.executablePath,
+                        approvals: state.settings.approvalsEnabled, approvalTimeout: state.settings.approvalTimeout,
+                        revision: hookRevision
+                    ) {
                         hookRevision += 1
                     }
                 }
@@ -94,13 +109,17 @@ struct AgentsTab: View {
 private struct HookRow: View {
     var account: Account
     var executable: String?
+    var approvals: Bool
+    var approvalTimeout: Int
     /// Bumped after a change so the status is read again.
     var revision: Int
     var changed: () -> Void
     @State private var error: String?
 
     var body: some View {
-        let status = executable.map { HookInstaller.status(for: account, executable: $0, approvals: false) }
+        let status = executable.map { HookInstaller.status(
+            for: account, executable: $0, approvals: approvals, approvalTimeout: approvalTimeout
+        ) }
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 ProviderIcon(provider: account.provider, size: 16)
@@ -116,7 +135,9 @@ private struct HookRow: View {
                     if status != .installed {
                         Button(status == .outdated ? "Update" : "Install") {
                             act {
-                                try HookInstaller.install(for: account, executable: executable, approvals: false, approvalTimeout: 60)
+                                try HookInstaller.install(
+                                    for: account, executable: executable, approvals: approvals, approvalTimeout: approvalTimeout
+                                )
                             }
                         }
                     }

@@ -111,6 +111,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var agentAttentionAlerts = true
     /// Alert when an agent finishes a turn that took a while.
     public var agentDoneAlerts = true
+    /// Answer Claude Code permission prompts from the notch.
+    public var approvalsEnabled = false
+    /// Seconds a prompt waits in the notch before Claude Code asks in the terminal instead.
+    public var approvalTimeout = 60
 
     public init() {}
 
@@ -139,6 +143,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         herdrEnabled = try c.decodeIfPresent(Bool.self, forKey: .herdrEnabled) ?? d.herdrEnabled
         agentAttentionAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentAttentionAlerts) ?? d.agentAttentionAlerts
         agentDoneAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentDoneAlerts) ?? d.agentDoneAlerts
+        approvalsEnabled = try c.decodeIfPresent(Bool.self, forKey: .approvalsEnabled) ?? d.approvalsEnabled
+        approvalTimeout = try c.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? d.approvalTimeout
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {

@@ -6,6 +6,8 @@ enum NotchMode {
     /// An alert hangs below the collapsed pill.
     case alert
     case expanded
+    /// A permission prompt waits for Allow / Deny.
+    case approval
 }
 
 enum NotchGeometry {
@@ -15,6 +17,8 @@ enum NotchGeometry {
     static let expandedContentHeight: CGFloat = 214
     static let alertWidth: CGFloat = 400
     static let alertHeight: CGFloat = 52
+    static let approvalWidth: CGFloat = 470
+    static let approvalHeight: CGFloat = 116
     /// The panel is always this big; only the drawn shape changes size.
     /// The margin around the expanded shape leaves room for its shadow.
     static let panelSize = CGSize(width: expandedWidth + 120, height: 340)
@@ -51,6 +55,8 @@ enum NotchGeometry {
         case .collapsed: collapsedSize(l)
         case .alert: alertSize(l)
         case .expanded: expandedSize(l)
+        case .approval:
+            CGSize(width: max(approvalWidth, l.notchWidth + wing * 2), height: l.notchHeight + approvalHeight)
         }
     }
 

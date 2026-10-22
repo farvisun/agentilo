@@ -2,6 +2,14 @@ import AgentLimitsCore
 import AppKit
 import SwiftUI
 
+struct PendingApproval: Identifiable, Equatable {
+    var request: ApprovalRequest
+    var sessionKey: String
+    var deadline: Date
+
+    var id: String { request.id }
+}
+
 enum NotchPage: Equatable {
     case agents
     case account(Account)
@@ -31,8 +39,56 @@ extension AppState {
         }
     }
 
-    func receive(_ event: AgentEvent) {
-        notify(agents.apply(event))
+    func receive(_ event: AgentEvent, alert: Bool = true) {
+        let transitions = agents.apply(event)
+        if alert { notify(transitions) }
+        // The turn moved on without us (answered in the terminal, interrupted): drop its prompt.
+        if [.prompt, .postTool, .stop, .sessionEnd].contains(event.kind) {
+            let key = AgentSessionStore.key(agent: event.agent, sessionID: event.sessionID, herdr: event.herdr)
+            for p in approvals where p.sessionKey == key { resolveApproval(p.id, .none) }
+        }
+    }
+
+    // MARK: Approvals
+
+    /// Holds a permission prompt in the notch until the user answers or it times out.
+    func requestApproval(_ request: ApprovalRequest) async -> ApprovalDecision {
+        let transitions = agents.apply(request.event)
+        let key = AgentSessionStore.key(agent: request.event.agent, sessionID: request.event.sessionID, herdr: request.event.herdr)
+        // Out of sight, or the user is looking at the terminal already: let Claude Code ask there
+        // without delay. Otherwise the card replaces the alert for this prompt.
+        let looking = agents.sessions[key].map(isLookingAt) ?? false
+        guard settings.approvalsEnabled, !notchHidden, !looking else {
+            notify(transitions)
+            return .none
+        }
+
+        let timeout = TimeInterval(max(5, settings.approvalTimeout))
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            approvals.append(PendingApproval(request: request, sessionKey: key, deadline: Date().addingTimeInterval(timeout)))
+        }
+        if settings.alertSound, approvals.count == 1 { NSSound(named: "Ping")?.play() }
+        return await withCheckedContinuation { c in
+            approvalWaiters[request.id] = c
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(timeout))
+                self?.resolveApproval(request.id, .none)
+            }
+        }
+    }
+
+    func resolveApproval(_ id: String, _ decision: ApprovalDecision) {
+        guard let waiter = approvalWaiters.removeValue(forKey: id) else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            approvals.removeAll { $0.id == id }
+        }
+        waiter.resume(returning: decision)
+    }
+
+    /// "Answer in terminal": no decision from us, and show the agent's pane.
+    func answerInTerminal(_ pending: PendingApproval) {
+        resolveApproval(pending.id, .none)
+        if let s = agents.sessions[pending.sessionKey] { jump(to: s) }
     }
 
     private func notify(_ transitions: [AgentTransition]) {
@@ -58,7 +114,7 @@ extension AppState {
     }
 
     /// The user is already looking at this agent: its herdr pane is focused in the frontmost terminal.
-    private func isLookingAt(_ s: AgentSession) -> Bool {
+    func isLookingAt(_ s: AgentSession) -> Bool {
         s.focused && NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Self.ghosttyBundleID
     }
 

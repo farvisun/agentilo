@@ -13,11 +13,20 @@ struct NotchRootView: View {
         case .collapsed: NotchShape(topRadius: 6, bottomRadius: 10)
         case .alert: NotchShape(topRadius: 8, bottomRadius: 20)
         case .expanded: NotchShape(topRadius: 10, bottomRadius: 26)
+        case .approval: NotchShape(topRadius: 10, bottomRadius: 24)
         }
         let shadow = mode == .collapsed ? 0.0 : 1.0
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                if state.expanded {
+                if mode == .approval, let pending = state.approvals.first {
+                    VStack(spacing: 0) {
+                        PillView(state: state)
+                        ApprovalCard(state: state, pending: pending)
+                            .id(pending.id)
+                            .transition(.opacity)
+                    }
+                    .transition(.opacity)
+                } else if state.expanded {
                     ExpandedView(state: state, openSettings: openSettings)
                         .padding(.horizontal, 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))

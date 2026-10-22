@@ -512,3 +512,59 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertTrue(try HookInstaller.read(HookInstaller.configURL(for: acct)!).isEmpty)
     }
 }
+
+final class ApprovalTests: XCTestCase {
+    private let hookInput: [String: Any] = [
+        "session_id": "s9", "cwd": "/p/api", "tool_name": "Bash",
+        "tool_input": ["command": "rm -rf build\nmake"],
+        "permission_suggestions": [["type": "addRules", "behavior": "allow", "destination": "localSettings",
+                                    "rules": [["toolName": "Bash", "ruleContent": "make:*"]]]],
+    ]
+
+    private func output(_ d: ApprovalDecision, _ r: ApprovalRequest) throws -> [String: Any]? {
+        guard let data = ApprovalResponse(decision: d).hookOutput(for: r) else { return nil }
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let specific = try XCTUnwrap(root["hookSpecificOutput"] as? [String: Any])
+        XCTAssertEqual(specific["hookEventName"] as? String, "PermissionRequest")
+        return specific["decision"] as? [String: Any]
+    }
+
+    func testRequestFromHookInput() {
+        let r = ApprovalRequest.from(hookInput: hookInput, agent: "claude", environment: [:])
+        XCTAssertEqual(r.input, "rm -rf build\nmake")
+        XCTAssertEqual(r.event.kind, .permission)
+        XCTAssertEqual(r.event.detail, "rm -rf build")
+        XCTAssertTrue(r.canAlwaysAllow)
+        XCTAssertFalse(ApprovalRequest(event: r.event, input: nil, suggestions: "[]").canAlwaysAllow)
+    }
+
+    func testDecisionsEncodeAsHookOutput() throws {
+        let r = ApprovalRequest.from(hookInput: hookInput, agent: "claude", environment: [:])
+        XCTAssertNil(try output(.none, r))
+        XCTAssertEqual(try output(.allow, r)?["behavior"] as? String, "allow")
+        XCTAssertNil(try output(.allow, r)?["updatedPermissions"])
+        let deny = try XCTUnwrap(try output(.deny, r))
+        XCTAssertEqual(deny["behavior"] as? String, "deny")
+        XCTAssertNotNil(deny["message"])
+        let always = try XCTUnwrap(try output(.allowAlways, r))
+        XCTAssertEqual((always["updatedPermissions"] as? [[String: Any]])?.first?["type"] as? String, "addRules")
+    }
+
+    func testRequestRoundTripsThroughAPIJSON() throws {
+        let r = ApprovalRequest.from(hookInput: hookInput, agent: "claude", environment: ["HERDR_PANE_ID": "w:p1"])
+        var back = try APIJSON.decoder.decode(ApprovalRequest.self, from: APIJSON.encoder.encode(r))
+        // ISO 8601 keeps whole seconds.
+        XCTAssertEqual(back.event.at.timeIntervalSince1970, r.event.at.timeIntervalSince1970, accuracy: 1)
+        back.event.at = r.event.at
+        XCTAssertEqual(back, r)
+    }
+
+    func testTimeoutChangeMakesHooksOutdated() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let acct = Account(provider: .claude, homePath: dir.path, label: "t")
+        try HookInstaller.install(for: acct, executable: "/x/AgentLimits", approvals: true, approvalTimeout: 30)
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: "/x/AgentLimits", approvals: true, approvalTimeout: 30), .installed)
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: "/x/AgentLimits", approvals: true, approvalTimeout: 60), .outdated)
+    }
+}

@@ -46,26 +46,33 @@ public enum HookInstaller {
     // MARK: Status
 
     public static func status(
-        for account: Account, executable: String, approvals: Bool, fileManager fm: FileManager = .default
+        for account: Account, executable: String, approvals: Bool, approvalTimeout: Int = 60,
+        fileManager fm: FileManager = .default
     ) -> Status {
         guard let url = configURL(for: account) else { return .unsupported("Cursor has no hooks") }
         let root = (try? read(url)) ?? [:]
-        let ours = commands(in: root)
+        let ours = entries(in: root)
         if ours.isEmpty { return .notInstalled }
-        let wanted = Set(events(for: account.provider, approvals: approvals).map {
-            command(executable: executable, provider: account.provider, event: $0)
-        })
-        return Set(ours) == wanted ? .installed : .outdated
+        let wanted = events(for: account.provider, approvals: approvals).map {
+            "\(command(executable: executable, provider: account.provider, event: $0))|\(timeout(for: $0, approvalTimeout: approvalTimeout))"
+        }
+        let have = ours.map { "\($0.command)|\($0.timeout ?? 0)" }
+        return Set(have) == Set(wanted) && have.count == wanted.count ? .installed : .outdated
     }
 
     /// Our commands currently in the config.
-    static func commands(in root: [String: Any]) -> [String] {
+    static func commands(in root: [String: Any]) -> [String] { entries(in: root).map(\.command) }
+
+    static func entries(in root: [String: Any]) -> [(command: String, timeout: Int?)] {
         guard let hooks = root["hooks"] as? [String: Any] else { return [] }
-        return hooks.values.flatMap { groups -> [String] in
-            ((groups as? [[String: Any]]) ?? []).flatMap { group -> [String] in
-                ((group["hooks"] as? [[String: Any]]) ?? []).compactMap { $0["command"] as? String }
+        return hooks.values.flatMap { groups -> [(command: String, timeout: Int?)] in
+            ((groups as? [[String: Any]]) ?? []).flatMap { group -> [(command: String, timeout: Int?)] in
+                ((group["hooks"] as? [[String: Any]]) ?? []).compactMap { h in
+                    guard let c = h["command"] as? String, c.hasSuffix(marker) else { return nil }
+                    return (c, h["timeout"] as? Int)
+                }
             }
-        }.filter { $0.hasSuffix(marker) }
+        }
     }
 
     // MARK: Install / remove

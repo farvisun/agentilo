@@ -47,8 +47,15 @@ final class AppState {
     var now = Date()
     let alerts = AlertCenter()
     var agents = AgentSessionStore()
+    /// Permission prompts waiting for an answer in the notch, oldest first.
+    var approvals: [PendingApproval] = []
+    /// The notch is out of sight (an app is full screen on its display).
+    var notchHidden = false
 
-    var notchMode: NotchMode { expanded ? .expanded : (alerts.current != nil ? .alert : .collapsed) }
+    var notchMode: NotchMode {
+        if !approvals.isEmpty { return .approval }
+        return expanded ? .expanded : (alerts.current != nil ? .alert : .collapsed)
+    }
 
     @ObservationIgnored private let statsEngine = StatsEngine()
     @ObservationIgnored private var firedAlerts = AlertStore.load()
@@ -66,6 +73,7 @@ final class AppState {
     @ObservationIgnored private var lastFetch: [UUID: Date] = [:]
     @ObservationIgnored var agentLoop: Task<Void, Never>?
     @ObservationIgnored let hookToken = HookToken.ensure()
+    @ObservationIgnored var approvalWaiters: [String: CheckedContinuation<ApprovalDecision, Never>] = [:]
 
     init() {
         var s = SettingsStore.load()
@@ -330,7 +338,13 @@ final class AppState {
             }
             receive(event)
             return .json(["ok": true])
-        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"):
+        case ("POST", "/v1/permission"):
+            guard req.headers[HookToken.header] == hookToken else { return .error(401, "bad token") }
+            guard let request = try? APIJSON.decoder.decode(ApprovalRequest.self, from: req.body) else {
+                return .error(400, "bad request")
+            }
+            return .json(ApprovalResponse(decision: await requestApproval(request)))
+        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"), (_, "/v1/permission"):
             return .error(405, "method not allowed")
         default:
             return .error(404, "not found")
