@@ -16,12 +16,15 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 /// The panel is fixed-size and click-through while collapsed, so it never blocks the menu bar;
 /// hover is detected by polling the cursor against the visible shape. In click mode the panel
 /// only takes mouse events while the cursor is over the pill, and a click elsewhere collapses it.
+/// The panel steps aside while an app is full screen on its display.
 @MainActor
 final class NotchWindowController {
     private let state: AppState
     private let panel: NotchPanel
     private var screen: NSScreen?
     private var pollTimer: Timer?
+    private var fullscreenTimer: Timer?
+    private var hiddenForFullscreen = false
     private var scrollMonitor: Any?
     private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
@@ -42,7 +45,7 @@ final class NotchWindowController {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.level = .mainMenu + 3
-        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panel.isMovable = false
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
@@ -58,11 +61,21 @@ final class NotchWindowController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reposition() }
         }
+        let workspace = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
+            workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateFullscreen() }
+            }
+        }
     }
 
     func show() {
         reposition()
-        panel.orderFrontRegardless()
+        if !hiddenForFullscreen { panel.orderFrontRegardless() }
+        // Notifications miss apps that cover the display without a Space of their own.
+        fullscreenTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateFullscreen() }
+        }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
@@ -85,10 +98,25 @@ final class NotchWindowController {
         screen = s
         state.layout = NotchGeometry.layout(for: s)
         panel.setFrame(NotchGeometry.panelFrame(on: s), display: true)
+        updateFullscreen()
+    }
+
+    private func updateFullscreen() {
+        guard let screen else { return }
+        let fullscreen = FullscreenDetector.isFullscreen(screen)
+        guard fullscreen != hiddenForFullscreen else { return }
+        hiddenForFullscreen = fullscreen
+        if fullscreen {
+            state.expanded = false
+            panel.ignoresMouseEvents = true
+            panel.orderOut(nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
     }
 
     private func poll() {
-        guard let screen else { return }
+        guard let screen, !hiddenForFullscreen else { return }
         // Debug: `--preview-expanded` pins the expanded view open for screenshots.
         if CommandLine.arguments.contains("--preview-expanded") {
             setExpanded(true)
@@ -128,7 +156,7 @@ final class NotchWindowController {
     /// Click mode: a click on the pill expands; a click outside the shape collapses.
     /// Returns true when the click was used to expand and should not reach the views.
     private func handleClick() -> Bool {
-        guard state.settings.expandTrigger == .click, let screen else { return false }
+        guard state.settings.expandTrigger == .click, let screen, !hiddenForFullscreen else { return false }
         let inside = isInside(NSEvent.mouseLocation, screen: screen)
         if !state.expanded, inside {
             setExpanded(true)
