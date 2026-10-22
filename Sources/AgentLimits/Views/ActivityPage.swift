@@ -6,8 +6,9 @@ struct ActivityPage: View {
     var stats: TokenStats
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
+        // Fixed columns must fit the ~524pt content width: 96 + 16 + 262 + 16 + 128.
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text("Streak").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(stats.currentStreak)")
@@ -15,14 +16,14 @@ struct ActivityPage: View {
                     Text(stats.currentStreak == 1 ? "day" : "days").font(.system(size: 10)).foregroundStyle(Palette.tertiary)
                 }
                 Text("longest \(stats.longestStreak)").font(.system(size: 10)).foregroundStyle(Palette.tertiary)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 6)
                 stat("Prompts", "\(stats.todayPrompts)")
                 stat("Tool calls", "\(stats.todayToolCalls)")
                 stat("Sessions", "\(stats.todaySessions)")
             }
-            .frame(width: 100)
+            .frame(width: 96, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     Text("Last 26 weeks").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
                     Spacer()
@@ -37,23 +38,22 @@ struct ActivityPage: View {
                         RoundedRectangle(cornerRadius: 2).fill(Heatmap.color(level)).frame(width: 8, height: 8)
                     }
                     Text("More").font(.system(size: 8)).foregroundStyle(Palette.tertiary)
-                    Spacer()
-                    Text("Cost at API list prices; plans are not billed per token")
-                        .font(.system(size: 8))
-                        .foregroundStyle(Palette.tertiary)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(width: Heatmap.width, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("Today").font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.secondary)
                 Text("≈ \(money(stats.todayCost))")
                     .font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit())
-                if stats.todayUnpriced > 0 {
-                    Text("+ \(Formatters.compactTokens(stats.todayUnpriced)) unpriced tokens")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.tertiary)
-                }
+                Text(stats.todayUnpriced > 0
+                     ? "API prices · +\(Formatters.compactTokens(stats.todayUnpriced)) unpriced"
+                     : "at API list prices")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Palette.tertiary)
+                    .lineLimit(1)
+                    .help("Plans are not billed per token; this is what the same usage would cost on the API.")
+                    .padding(.bottom, 2)
                 ForEach(stats.todayProjects.prefix(4)) { p in
                     HStack {
                         Text(p.name).font(.system(size: 10)).lineLimit(1).truncationMode(.middle)
@@ -66,8 +66,9 @@ struct ActivityPage: View {
                     Text("No sessions today").font(.system(size: 10)).foregroundStyle(Palette.tertiary)
                 }
             }
-            .frame(width: 140)
+            .frame(width: 128, alignment: .leading)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -86,8 +87,10 @@ struct ActivityPage: View {
 /// One cell per day, a column per week, today in the bottom-right corner.
 private struct Heatmap: View {
     var days: [DayRecord]
-    static let cell: CGFloat = 9
+    static let cell: CGFloat = 8
     static let gap: CGFloat = 2
+    static let weeks = 26
+    static var width: CGFloat { CGFloat(weeks) * (cell + gap) - gap }
 
     var body: some View {
         let levels = Self.levels(days)
