@@ -1,10 +1,20 @@
 import AppKit
 
+/// What the notch is drawing right now.
+enum NotchMode {
+    case collapsed
+    /// An alert hangs below the collapsed pill.
+    case alert
+    case expanded
+}
+
 enum NotchGeometry {
     /// Width of each "wing" the collapsed pill adds beside the notch.
     static let wing: CGFloat = 62
     static let expandedWidth: CGFloat = 580
     static let expandedContentHeight: CGFloat = 214
+    static let alertWidth: CGFloat = 400
+    static let alertHeight: CGFloat = 52
     /// The panel is always this big; only the drawn shape changes size.
     /// The margin around the expanded shape leaves room for its shadow.
     static let panelSize = CGSize(width: expandedWidth + 120, height: 340)
@@ -32,9 +42,21 @@ enum NotchGeometry {
         CGSize(width: max(expandedWidth, l.notchWidth + wing * 2), height: l.notchHeight + expandedContentHeight)
     }
 
+    static func alertSize(_ l: NotchLayout) -> CGSize {
+        CGSize(width: max(alertWidth, l.notchWidth + wing * 2), height: l.notchHeight + alertHeight)
+    }
+
+    static func size(_ mode: NotchMode, _ l: NotchLayout) -> CGSize {
+        switch mode {
+        case .collapsed: collapsedSize(l)
+        case .alert: alertSize(l)
+        case .expanded: expandedSize(l)
+        }
+    }
+
     /// Screen-space rect of the visible shape, centered under the notch.
-    static func hotRect(on screen: NSScreen, layout l: NotchLayout, expanded: Bool) -> CGRect {
-        let size = expanded ? expandedSize(l) : collapsedSize(l)
+    static func hotRect(on screen: NSScreen, layout l: NotchLayout, mode: NotchMode) -> CGRect {
+        let size = size(mode, l)
         let midX = notchMidX(on: screen)
         return CGRect(x: midX - size.width / 2, y: screen.frame.maxY - size.height, width: size.width, height: size.height)
     }

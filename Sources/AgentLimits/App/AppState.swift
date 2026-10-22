@@ -44,8 +44,12 @@ final class AppState {
     var expanded = false
     var page = 0
     var now = Date()
+    let alerts = AlertCenter()
+
+    var notchMode: NotchMode { expanded ? .expanded : (alerts.current != nil ? .alert : .collapsed) }
 
     @ObservationIgnored private let statsEngine = StatsEngine()
+    @ObservationIgnored private var firedAlerts = AlertStore.load()
     /// Last good server response per account, persisted for offline fallback.
     @ObservationIgnored private var stored: [UUID: StoredUsage] = SnapshotStore.load()
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -191,6 +195,7 @@ final class AppState {
 
     private func apply(_ result: Result<StoredUsage, Error>, fallback: UsageSnapshot?, to id: UUID) {
         var st = statuses[id] ?? AccountStatus()
+        let old = st.snapshot
         st.loading = false
         switch result {
         case .success(let usage):
@@ -213,6 +218,31 @@ final class AppState {
         }
         statuses[id] = st
         now = Date()
+        if let snap = st.snapshot { checkAlerts(id, old: old, new: snap) }
+    }
+
+    // MARK: Alerts
+
+    private func checkAlerts(_ id: UUID, old: UsageSnapshot?, new: UsageSnapshot) {
+        guard settings.alertsEnabled, let acct = settings.accounts.first(where: { $0.id == id }) else { return }
+        let before = firedAlerts
+        let found = AlertEngine.evaluate(
+            previous: old, current: new, account: acct,
+            thresholds: settings.alertThresholds, resetAlerts: settings.resetAlerts,
+            fired: &firedAlerts, now: now
+        )
+        if firedAlerts != before { AlertStore.save(firedAlerts) }
+        for a in found { alerts.post(NotchAlert(a, sound: settings.alertSound, now: now)) }
+    }
+
+    /// Settings → Alerts → "Show a test alert".
+    func postTestAlert() {
+        let provider = limitAccounts.first?.provider ?? .claude
+        alerts.post(NotchAlert(
+            provider: provider, title: "\(provider.displayName) session at 90%",
+            message: "Runs out \(Formatters.resetTime(Date().addingTimeInterval(2_700))) · test alert",
+            color: Palette.red, sound: settings.alertSound ? "Funk" : nil
+        ))
     }
 
     func refreshStats() {
@@ -232,7 +262,9 @@ final class AppState {
             await MainActor.run {
                 self.stats = s
                 for (id, snap) in refreshed where self.statuses[id]?.snapshot?.source != .live {
+                    let old = self.statuses[id]?.snapshot
                     self.statuses[id]?.snapshot = snap
+                    self.checkAlerts(id, old: old, new: snap)
                 }
                 self.statsTask = nil
             }

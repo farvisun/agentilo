@@ -11,6 +11,8 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             AccountsTab(state: state)
                 .tabItem { Label("Accounts", systemImage: "person.2") }
+            AlertsTab(state: state)
+                .tabItem { Label("Alerts", systemImage: "bell") }
             ProxyTab(state: state)
                 .tabItem { Label("Proxy", systemImage: "network") }
         }
@@ -84,6 +86,43 @@ struct GeneralTab: View {
         } catch {
             loginError = "Could not change login item: \(error.localizedDescription)"
         }
+    }
+}
+
+struct AlertsTab: View {
+    @Bindable var state: AppState
+
+    var body: some View {
+        Form {
+            Toggle("Drop alerts out of the notch", isOn: $state.settings.alertsEnabled)
+            Section("Warn when a limit reaches") {
+                ForEach([75, 90, 100], id: \.self) { t in
+                    Toggle(t == 100 ? "100% (limit reached)" : "\(t)%", isOn: threshold(t))
+                }
+                Toggle("Tell me when a window resets", isOn: $state.settings.resetAlerts)
+            }
+            .disabled(!state.settings.alertsEnabled)
+            Toggle("Play a sound", isOn: $state.settings.alertSound)
+                .disabled(!state.settings.alertsEnabled)
+            Section {
+                Button("Show a test alert") { state.postTestAlert() }
+                Text("Each threshold alerts once per window period. Alerts wait while the notch is open or an app is full screen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func threshold(_ t: Int) -> Binding<Bool> {
+        Binding(
+            get: { state.settings.alertThresholds.contains(t) },
+            set: { on in
+                var ts = Set(state.settings.alertThresholds)
+                if on { ts.insert(t) } else { ts.remove(t) }
+                state.settings.alertThresholds = ts.sorted()
+            }
+        )
     }
 }
 

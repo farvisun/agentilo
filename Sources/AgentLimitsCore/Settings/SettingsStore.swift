@@ -95,6 +95,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var expandTrigger = ExpandTrigger.hover
     public var pillWindow = PillWindow.mostCritical
     public var pillStyle = PillStyle.both
+    public var alertsEnabled = true
+    /// Usage percentages that drop an alert out of the notch; 100 means "limit reached".
+    public var alertThresholds = [75, 90, 100]
+    public var resetAlerts = true
+    public var alertSound = true
 
     public init() {}
 
@@ -113,6 +118,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         expandTrigger = try c.decodeIfPresent(ExpandTrigger.self, forKey: .expandTrigger) ?? d.expandTrigger
         pillWindow = try c.decodeIfPresent(PillWindow.self, forKey: .pillWindow) ?? d.pillWindow
         pillStyle = try c.decodeIfPresent(PillStyle.self, forKey: .pillStyle) ?? d.pillStyle
+        alertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .alertsEnabled) ?? d.alertsEnabled
+        alertThresholds = try c.decodeIfPresent([Int].self, forKey: .alertThresholds) ?? d.alertThresholds
+        resetAlerts = try c.decodeIfPresent(Bool.self, forKey: .resetAlerts) ?? d.resetAlerts
+        alertSound = try c.decodeIfPresent(Bool.self, forKey: .alertSound) ?? d.alertSound
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {

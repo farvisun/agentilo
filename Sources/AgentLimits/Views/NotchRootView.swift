@@ -7,8 +7,14 @@ struct NotchRootView: View {
 
     var body: some View {
         let l = state.layout
-        let size = state.expanded ? NotchGeometry.expandedSize(l) : NotchGeometry.collapsedSize(l)
-        let shape = NotchShape(topRadius: state.expanded ? 10 : 6, bottomRadius: state.expanded ? 26 : 10)
+        let mode = state.notchMode
+        let size = NotchGeometry.size(mode, l)
+        let shape = switch mode {
+        case .collapsed: NotchShape(topRadius: 6, bottomRadius: 10)
+        case .alert: NotchShape(topRadius: 8, bottomRadius: 20)
+        case .expanded: NotchShape(topRadius: 10, bottomRadius: 26)
+        }
+        let shadow = mode == .collapsed ? 0.0 : 1.0
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
                 if state.expanded {
@@ -16,8 +22,15 @@ struct NotchRootView: View {
                         .padding(.horizontal, 10)
                         .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
                 } else {
-                    PillView(state: state)
-                        .transition(.opacity)
+                    VStack(spacing: 0) {
+                        PillView(state: state)
+                        if let alert = state.alerts.current {
+                            AlertBanner(alert: alert)
+                                .id(alert.id)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                    .transition(.opacity)
                 }
             }
             .frame(width: size.width, height: size.height)
@@ -26,8 +39,8 @@ struct NotchRootView: View {
             .background {
                 shape
                     .fill(Color.black)
-                    .shadow(color: .black.opacity(state.expanded ? 0.5 : 0), radius: 18, y: 8)
-                    .shadow(color: .black.opacity(state.expanded ? 0.25 : 0), radius: 3, y: 1)
+                    .shadow(color: .black.opacity(0.5 * shadow), radius: 18, y: 8)
+                    .shadow(color: .black.opacity(0.25 * shadow), radius: 3, y: 1)
             }
             Spacer(minLength: 0)
         }

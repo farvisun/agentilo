@@ -268,3 +268,42 @@ final class OfflineFallbackTests: XCTestCase {
         XCTAssertEqual(UsageDisplay.used.value(61), 61)
     }
 }
+
+final class AlertEngineTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 2_000_000)
+    let account = Account(provider: .claude, homePath: "~/.claude", label: "me")
+
+    private func snap(_ used: Double, reset: TimeInterval = 3_600) -> UsageSnapshot {
+        UsageSnapshot(windows: [
+            UsageWindow(id: "session", kind: .session, title: "Session", usedPercent: used,
+                        resetsAt: now.addingTimeInterval(reset), windowLength: 18_000),
+        ])
+    }
+
+    private func run(_ old: UsageSnapshot?, _ new: UsageSnapshot, _ fired: inout [String: Date]) -> [LimitAlert.Kind] {
+        AlertEngine.evaluate(previous: old, current: new, account: account, thresholds: [75, 90, 100],
+                             resetAlerts: true, fired: &fired, now: now).map(\.kind)
+    }
+
+    func testFiresHighestCrossedThresholdOnce() {
+        var fired: [String: Date] = [:]
+        XCTAssertEqual(run(snap(50), snap(70), &fired), [])
+        XCTAssertEqual(run(snap(70), snap(92), &fired), [.threshold(90)])
+        // Same period: no repeat, and 75 is not fired after 90.
+        XCTAssertEqual(run(snap(92), snap(93), &fired), [])
+        XCTAssertEqual(run(snap(93), snap(100), &fired), [.limitReached])
+    }
+
+    func testResetFiresAndClearsPeriod() {
+        var fired: [String: Date] = [:]
+        _ = run(nil, snap(95), &fired)
+        XCTAssertEqual(run(snap(95), snap(1, reset: 18_000), &fired), [.reset])
+        XCTAssertEqual(run(snap(1, reset: 18_000), snap(80, reset: 18_000), &fired), [.threshold(75)])
+    }
+
+    func testResetJitterKeepsKey() {
+        var fired: [String: Date] = [:]
+        _ = run(nil, snap(80), &fired)
+        XCTAssertEqual(run(snap(80), snap(81, reset: 3_600.4), &fired), [])
+    }
+}

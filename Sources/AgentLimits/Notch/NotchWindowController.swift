@@ -106,6 +106,7 @@ final class NotchWindowController {
         let fullscreen = FullscreenDetector.isFullscreen(screen)
         guard fullscreen != hiddenForFullscreen else { return }
         hiddenForFullscreen = fullscreen
+        state.alerts.hold(.fullscreen, fullscreen)
         if fullscreen {
             state.expanded = false
             panel.ignoresMouseEvents = true
@@ -148,7 +149,7 @@ final class NotchWindowController {
     }
 
     private func isInside(_ point: NSPoint, screen: NSScreen) -> Bool {
-        let rect = NotchGeometry.hotRect(on: screen, layout: state.layout, expanded: state.expanded)
+        let rect = NotchGeometry.hotRect(on: screen, layout: state.layout, mode: state.notchMode)
         // A little slack so the edge of the shape does not flicker.
         return rect.insetBy(dx: -4, dy: -4).contains(point)
     }
@@ -178,6 +179,7 @@ final class NotchWindowController {
             state.expanded = value
         }
         panel.ignoresMouseEvents = !value
+        state.alerts.hold(.expanded, value)
         if value {
             if state.page >= state.pageCount { state.page = 0 }
             state.expandedRefresh()

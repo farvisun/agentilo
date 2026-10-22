@@ -14,6 +14,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notch.show()
         state.start()
         if state.settings.accounts.isEmpty { openSettings() }
+        // Debug: `--preview-alert` drops a sample alert for screenshots.
+        if CommandLine.arguments.contains("--preview-alert") {
+            Task { @MainActor [state] in
+                try? await Task.sleep(for: .seconds(2))
+                state?.postTestAlert()
+            }
+        }
     }
 
     /// Reopening the app from Finder or Spotlight shows Settings, since there is no Dock icon.
