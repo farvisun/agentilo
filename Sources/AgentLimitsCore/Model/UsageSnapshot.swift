@@ -103,6 +103,22 @@ public struct UsageSnapshot: Codable, Hashable, Sendable {
 
     /// The window closest to trouble: worst pace first, then highest usage.
     public func mostCritical(now: Date = Date()) -> UsageWindow? {
+        Self.mostCritical(windows, now: now)
+    }
+
+    /// The window the pill shows for a choice; falls back to the most critical one
+    /// when the account has no window of that kind (Cursor only has billing).
+    public func window(for choice: PillWindow, now: Date = Date()) -> UsageWindow? {
+        let kind: WindowKind
+        switch choice {
+        case .mostCritical: return mostCritical(now: now)
+        case .session: kind = .session
+        case .weekly: kind = .weekly
+        }
+        return Self.mostCritical(windows.filter { $0.kind == kind }, now: now) ?? mostCritical(now: now)
+    }
+
+    static func mostCritical(_ windows: [UsageWindow], now: Date) -> UsageWindow? {
         windows.max { a, b in
             let pa = a.pace(now: now).severity, pb = b.pace(now: now).severity
             if pa != pb { return pa < pb }

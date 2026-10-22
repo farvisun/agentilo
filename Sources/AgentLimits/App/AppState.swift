@@ -85,7 +85,7 @@ final class AppState {
     func critical(provider: Provider?) -> (account: Account, window: UsageWindow)? {
         var best: (Account, UsageWindow)?
         for acct in limitAccounts where provider == nil || acct.provider == provider {
-            guard let w = statuses[acct.id]?.snapshot?.mostCritical(now: now) else { continue }
+            guard let w = statuses[acct.id]?.snapshot?.window(for: settings.pillWindow, now: now) else { continue }
             if let (_, b) = best {
                 let sa = w.pace(now: now).severity, sb = b.pace(now: now).severity
                 if sa < sb || (sa == sb && w.usedPercent <= b.usedPercent) { continue }
@@ -104,7 +104,7 @@ final class AppState {
             return critical.map { [$0] } ?? []
         case .pinned:
             if let id = settings.pinnedAccount, let acct = limitAccounts.first(where: { $0.id == id }),
-               let w = status(acct).snapshot?.mostCritical(now: now) {
+               let w = status(acct).snapshot?.window(for: settings.pillWindow, now: now) {
                 return [(acct, w)]
             }
             return critical.map { [$0] } ?? []

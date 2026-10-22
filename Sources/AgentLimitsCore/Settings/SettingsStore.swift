@@ -33,6 +33,44 @@ public enum PillMode: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// Which limit window the collapsed pill shows for an account.
+public enum PillWindow: String, Codable, CaseIterable, Sendable, Identifiable {
+    /// Whichever window is closest to its limit.
+    case mostCritical
+    case session
+    case weekly
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .mostCritical: "Most critical"
+        case .session: "Session"
+        case .weekly: "Weekly"
+        }
+    }
+}
+
+/// How the collapsed pill draws the percentage left of the notch.
+public enum PillStyle: String, Codable, CaseIterable, Sendable, Identifiable {
+    case ring
+    case number
+    case both
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .ring: "Circle"
+        case .number: "Number"
+        case .both: "Both"
+        }
+    }
+
+    public var showsRing: Bool { self != .number }
+    public var showsNumber: Bool { self != .ring }
+}
+
 /// What opens the expanded notch.
 public enum ExpandTrigger: String, Codable, CaseIterable, Sendable, Identifiable {
     case hover
@@ -55,6 +93,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var pillMode = PillMode.mostCritical
     public var pinnedAccount: UUID?
     public var expandTrigger = ExpandTrigger.hover
+    public var pillWindow = PillWindow.mostCritical
+    public var pillStyle = PillStyle.both
 
     public init() {}
 
@@ -71,6 +111,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         pillMode = try c.decodeIfPresent(PillMode.self, forKey: .pillMode) ?? d.pillMode
         pinnedAccount = try c.decodeIfPresent(UUID.self, forKey: .pinnedAccount)
         expandTrigger = try c.decodeIfPresent(ExpandTrigger.self, forKey: .expandTrigger) ?? d.expandTrigger
+        pillWindow = try c.decodeIfPresent(PillWindow.self, forKey: .pillWindow) ?? d.pillWindow
+        pillStyle = try c.decodeIfPresent(PillStyle.self, forKey: .pillStyle) ?? d.pillStyle
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {

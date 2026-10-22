@@ -36,7 +36,7 @@ struct NotchRootView: View {
     }
 }
 
-/// Collapsed: one account fills both wings (ring left, percentage right);
+/// Collapsed: one account fills both wings (provider icon left, usage right);
 /// two accounts get one wing each.
 struct PillView: View {
     var state: AppState
@@ -56,45 +56,70 @@ struct PillView: View {
                     .frame(width: NotchGeometry.wing)
             } else {
                 let item = items.first
-                let pace = item?.window.pace(now: state.now) ?? .unknown
-                let pct = item.map { state.settings.displayMode.value($0.window.usedPercent) }
-                HStack(spacing: 5) {
+                Group {
                     if let provider = item?.account.provider {
                         ProviderIcon(provider: provider, size: 13)
                     }
-                    RingView(fraction: (pct ?? 0) / 100, color: pace.color, lineWidth: 2.4)
-                        .frame(width: 13, height: 13)
                 }
+                .padding(.leading, 6)
                 .frame(width: NotchGeometry.wing, alignment: .center)
 
                 Spacer().frame(width: l.notchWidth)
 
-                Text(pct.map { percentText($0, item.map { state.status($0.account) }) } ?? "–")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(pct == nil ? Palette.idle : pace.color)
-                    .frame(width: NotchGeometry.wing, alignment: .center)
+                Group {
+                    if let item {
+                        UsageGauge(state: state, account: item.account, window: item.window, ringSize: 13)
+                    } else {
+                        Text("–")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Palette.idle)
+                    }
+                }
+                .padding(.trailing, 6)
+                .frame(width: NotchGeometry.wing, alignment: .center)
             }
         }
         .frame(height: l.notchHeight)
     }
 }
 
-/// Provider glyph + percentage, sized for one wing.
+/// Provider glyph + usage, sized for one wing.
 private struct CompactItem: View {
     var state: AppState
     var account: Account
     var window: UsageWindow
 
     var body: some View {
-        let pace = window.pace(now: state.now)
-        let pct = state.settings.displayMode.value(window.usedPercent)
         HStack(spacing: 3) {
             ProviderIcon(provider: account.provider, size: 12)
-            Text(percentText(pct, state.status(account)))
-                .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
-                .foregroundStyle(pace.color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            UsageGauge(state: state, account: account, window: window, ringSize: 12)
+        }
+    }
+}
+
+/// Ring, number or both, per the pill style setting.
+private struct UsageGauge: View {
+    var state: AppState
+    var account: Account
+    var window: UsageWindow
+    var ringSize: CGFloat
+
+    var body: some View {
+        let style = state.settings.pillStyle
+        let pace = window.pace(now: state.now)
+        let pct = state.settings.displayMode.value(window.usedPercent)
+        HStack(spacing: 4) {
+            if style.showsRing {
+                RingView(fraction: pct / 100, color: pace.color, lineWidth: 2.4)
+                    .frame(width: ringSize, height: ringSize)
+            }
+            if style.showsNumber {
+                Text(percentText(pct, state.status(account)))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(pace.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
         }
     }
 }

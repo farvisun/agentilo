@@ -51,6 +51,14 @@ struct GeneralTab: View {
                     }
                 }
             }
+            Picker("Collapsed limit", selection: $state.settings.pillWindow) {
+                ForEach(PillWindow.allCases) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Picker("Collapsed usage as", selection: $state.settings.pillStyle) {
+                ForEach(PillStyle.allCases) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
             Toggle("Show local token statistics", isOn: $state.settings.showTokenStats)
             Toggle("Launch at login", isOn: Binding(
                 get: { state.settings.launchAtLogin },

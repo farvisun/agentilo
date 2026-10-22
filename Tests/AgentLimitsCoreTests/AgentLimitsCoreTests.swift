@@ -51,6 +51,24 @@ final class PaceTests: XCTestCase {
     }
 }
 
+final class PillWindowTests: XCTestCase {
+    private func window(_ id: String, _ kind: WindowKind, _ used: Double) -> UsageWindow {
+        UsageWindow(id: id, kind: kind, title: id, usedPercent: used, resetsAt: nil, windowLength: nil)
+    }
+
+    func testPicksChosenKindAndFallsBack() {
+        let snap = UsageSnapshot(windows: [
+            window("session", .session, 20), window("weekly", .weekly, 40), window("opus", .weekly, 70),
+        ])
+        XCTAssertEqual(snap.window(for: .session)?.id, "session")
+        XCTAssertEqual(snap.window(for: .weekly)?.id, "opus")
+        XCTAssertEqual(snap.window(for: .mostCritical)?.id, "opus")
+
+        let billing = UsageSnapshot(windows: [window("plan", .billing, 30)])
+        XCTAssertEqual(billing.window(for: .session)?.id, "plan")
+    }
+}
+
 final class ProviderParsingTests: XCTestCase {
     func testClaudeLimitsArray() throws {
         let snap = ClaudeProvider.parse(try fixtureJSON("claude_usage.json"))
