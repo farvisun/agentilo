@@ -13,6 +13,8 @@ struct SettingsView: View {
                 .tabItem { Label("Accounts", systemImage: "person.2") }
             AlertsTab(state: state)
                 .tabItem { Label("Alerts", systemImage: "bell") }
+            AgentsTab(state: state)
+                .tabItem { Label("Agents", systemImage: "terminal") }
             ProxyTab(state: state)
                 .tabItem { Label("Proxy", systemImage: "network") }
         }

@@ -100,6 +100,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var alertThresholds = [75, 90, 100]
     public var resetAlerts = true
     public var alertSound = true
+    /// Serve limits on 127.0.0.1 for agents, status lines and the CLI.
+    public var apiEnabled = true
+    public var apiPort = 6737
+    /// Put account labels (often emails) in API output.
+    public var apiIncludeLabels = false
 
     public init() {}
 
@@ -122,6 +127,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         alertThresholds = try c.decodeIfPresent([Int].self, forKey: .alertThresholds) ?? d.alertThresholds
         resetAlerts = try c.decodeIfPresent(Bool.self, forKey: .resetAlerts) ?? d.resetAlerts
         alertSound = try c.decodeIfPresent(Bool.self, forKey: .alertSound) ?? d.alertSound
+        apiEnabled = try c.decodeIfPresent(Bool.self, forKey: .apiEnabled) ?? d.apiEnabled
+        apiPort = try c.decodeIfPresent(Int.self, forKey: .apiPort) ?? d.apiPort
+        apiIncludeLabels = try c.decodeIfPresent(Bool.self, forKey: .apiIncludeLabels) ?? d.apiIncludeLabels
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {

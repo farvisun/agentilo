@@ -35,6 +35,7 @@ final class AppState {
                 refreshStats()
             }
             if settings.refreshInterval != oldValue.refreshInterval { startLoop() }
+            if settings.apiEnabled != oldValue.apiEnabled || settings.apiPort != oldValue.apiPort { startServer() }
         }
     }
 
@@ -50,6 +51,9 @@ final class AppState {
 
     @ObservationIgnored private let statsEngine = StatsEngine()
     @ObservationIgnored private var firedAlerts = AlertStore.load()
+    @ObservationIgnored private var server: LocalServer?
+    /// Why the local API is not serving, for Settings.
+    var serverError: String?
     /// Last good server response per account, persisted for offline fallback.
     @ObservationIgnored private var stored: [UUID: StoredUsage] = SnapshotStore.load()
     @ObservationIgnored private var loop: Task<Void, Never>?
@@ -129,6 +133,7 @@ final class AppState {
 
     func start() {
         startLoop()
+        startServer()
         refreshStats()
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -269,6 +274,59 @@ final class AppState {
                 self.statsTask = nil
             }
         }
+    }
+
+    // MARK: Local API
+
+    private func startServer() {
+        server?.stop()
+        server = nil
+        serverError = nil
+        guard settings.apiEnabled else { return }
+        guard let port = UInt16(exactly: settings.apiPort), port >= 1024 else {
+            serverError = "Port must be between 1024 and 65535"
+            return
+        }
+        let s = LocalServer(port: port) { [weak self] req in
+            await self?.handle(req) ?? .error(503, "shutting down")
+        }
+        do {
+            try s.start()
+            server = s
+        } catch {
+            serverError = "Could not listen on 127.0.0.1:\(port): \(error.localizedDescription)"
+        }
+    }
+
+    private func handle(_ req: HTTPRequest) async -> HTTPResponse {
+        switch (req.method, req.path) {
+        case ("GET", "/v1/health"):
+            return .json(["ok": true])
+        case ("GET", "/v1/limits"):
+            if req.query["refresh"] != nil {
+                refreshAll(force: true)
+                // Wait for the fetches, but never hold a status line hostage.
+                for _ in 0..<60 where limitAccounts.contains(where: { statuses[$0.id]?.loading == true }) {
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+            }
+            return .json(limitsPayload())
+        case (_, "/v1/health"), (_, "/v1/limits"):
+            return .error(405, "method not allowed")
+        default:
+            return .error(404, "not found")
+        }
+    }
+
+    func limitsPayload() -> LimitsPayload {
+        LimitsPayload.build(
+            accounts: limitAccounts,
+            snapshots: statuses.compactMapValues(\.snapshot),
+            errors: statuses.compactMapValues(\.error),
+            includeLabels: settings.apiIncludeLabels,
+            origin: "app",
+            now: Date()
+        )
     }
 
     // MARK: Proxy

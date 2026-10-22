@@ -307,3 +307,67 @@ final class AlertEngineTests: XCTestCase {
         XCTAssertEqual(run(snap(80), snap(81, reset: 3_600.4), &fired), [])
     }
 }
+
+final class LocalAPITests: XCTestCase {
+    private func parse(_ s: String) -> HTTPRequest? {
+        if case .complete(let r) = HTTPRequest.parse(Data(s.utf8)) { return r }
+        return nil
+    }
+
+    func testParsesRequestWithBodyAndQuery() throws {
+        let r = try XCTUnwrap(parse("POST /v1/events?x=1 HTTP/1.1\r\nHost: 127.0.0.1:6737\r\nContent-Length: 4\r\n\r\nabcd"))
+        XCTAssertEqual(r.method, "POST")
+        XCTAssertEqual(r.path, "/v1/events")
+        XCTAssertEqual(r.query["x"], "1")
+        XCTAssertEqual(String(decoding: r.body, as: UTF8.self), "abcd")
+        XCTAssertTrue(r.isTrustedLocal(port: 6737))
+    }
+
+    func testIncompleteUntilBodyArrives() {
+        guard case .incomplete = HTTPRequest.parse(Data("POST / HTTP/1.1\r\nContent-Length: 10\r\n\r\nabc".utf8)) else {
+            return XCTFail()
+        }
+        guard case .incomplete = HTTPRequest.parse(Data("GET / HTTP/1.1\r\nHost: x".utf8)) else { return XCTFail() }
+    }
+
+    func testRefusesBrowserAndForeignHost() throws {
+        let browser = try XCTUnwrap(parse("GET /v1/limits HTTP/1.1\r\nHost: 127.0.0.1:6737\r\nOrigin: https://evil.example\r\n\r\n"))
+        XCTAssertFalse(browser.isTrustedLocal(port: 6737))
+        let rebound = try XCTUnwrap(parse("GET /v1/limits HTTP/1.1\r\nHost: evil.example:6737\r\n\r\n"))
+        XCTAssertFalse(rebound.isTrustedLocal(port: 6737))
+    }
+
+    func testPayloadRedactsLabelsAndFormatsShortLine() {
+        let a = Account(provider: .claude, homePath: "~/.claude", label: "me@example.com")
+        let b = Account(provider: .codex, homePath: "~/.codex", label: "work@example.com")
+        let snap = UsageSnapshot(windows: [
+            UsageWindow(id: "s", kind: .session, title: "Session", usedPercent: 16.04, resetsAt: nil, windowLength: nil),
+            UsageWindow(id: "w", kind: .weekly, title: "Weekly", usedPercent: 100, resetsAt: nil, windowLength: nil),
+        ])
+        let p = LimitsPayload.build(accounts: [a, b], snapshots: [a.id: snap], includeLabels: false, origin: "app")
+        XCTAssertEqual(p.accounts.map(\.label), ["Claude 1", "Codex 1"])
+        XCTAssertEqual(p.accounts[0].windows[0].usedPercent, 16)
+        XCTAssertEqual(p.accounts[0].windows[1].pace, "limitReached")
+        XCTAssertEqual(p.shortLine(), "Claude S 16% W 100%!")
+        let labeled = LimitsPayload.build(accounts: [a], snapshots: [:], includeLabels: true, origin: "app")
+        XCTAssertEqual(labeled.accounts[0].label, "me@example.com")
+    }
+
+    func testServerAnswersOverLoopback() async throws {
+        let port: UInt16 = 46_737
+        let server = LocalServer(port: port) { req in .json(["path": req.path]) }
+        try server.start()
+        defer { server.stop() }
+        try await Task.sleep(for: .milliseconds(200))
+        let config = URLSessionConfiguration.ephemeral
+        config.connectionProxyDictionary = [:]
+        let (data, resp) = try await URLSession(configuration: config).data(from: URL(string: "http://127.0.0.1:\(port)/v1/x")!)
+        XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(try JSONDecoder().decode([String: String].self, from: data)["path"], "/v1/x")
+
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/v1/x")!)
+        req.setValue("https://evil.example", forHTTPHeaderField: "Origin")
+        let (_, denied) = try await URLSession(configuration: config).data(for: req)
+        XCTAssertEqual((denied as? HTTPURLResponse)?.statusCode, 403)
+    }
+}
