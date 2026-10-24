@@ -8,6 +8,8 @@
 	<string>AgentLimits</string>
 	<key>CFBundleIdentifier</key>
 	<string>app.agentlimits.notch</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>Agent Limits</string>
 	<key>CFBundleDisplayName</key>
