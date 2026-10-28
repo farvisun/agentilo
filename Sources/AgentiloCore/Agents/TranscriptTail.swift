@@ -92,9 +92,13 @@ public enum ReplyExcerpt {
             if line.hasPrefix("```") { inFence.toggle(); continue }
             if inFence || line.isEmpty || line.hasPrefix("|") || line.allSatisfy({ "-=*_".contains($0) }) { continue }
             var l = line
+            let heading = l.hasPrefix("#")
             while let f = l.first, "#>".contains(f) { l.removeFirst() }
             for bullet in ["- ", "* ", "+ "] where l.hasPrefix(bullet) { l.removeFirst(2) }
-            out.append(l.trimmingCharacters(in: .whitespaces))
+            l = l.trimmingCharacters(in: .whitespaces)
+            // "## Done" then "The fix…" reads as "Done. The fix…", not "Done The fix…".
+            if heading, let last = l.last, !".!?:".contains(last) { l += "." }
+            out.append(l)
         }
         var s = out.joined(separator: " ")
         // [label](url) → label, then drop emphasis and inline code marks.

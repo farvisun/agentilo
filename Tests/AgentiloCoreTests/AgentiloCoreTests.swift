@@ -544,7 +544,7 @@ final class TurnSummaryTests: XCTestCase {
         XCTAssertTrue(reply.hasSuffix("Run `make test` to confirm."))
         XCTAssertEqual(
             ReplyExcerpt.make(reply),
-            "Fixed The build passes now. I removed the stale build/ cache in Makefile. Run make test to confirm."
+            "Fixed. The build passes now. I removed the stale build/ cache in Makefile. Run make test to confirm."
         )
     }
 
@@ -560,6 +560,12 @@ final class TurnSummaryTests: XCTestCase {
         XCTAssertFalse(e.contains("let x"))
         XCTAssertEqual(e.count, 60)
         XCTAssertNil(ReplyExcerpt.make("```\ncode only\n```"))
+    }
+
+    func testShortTurnsShowSeconds() {
+        XCTAssertEqual(Formatters.duration(22), "22s")
+        XCTAssertEqual(Formatters.duration(240), "4m")
+        XCTAssertEqual(Formatters.duration(3_900), "1h 5m")
     }
 
     func testStopHookCarriesReplyAndTurnCounters() {

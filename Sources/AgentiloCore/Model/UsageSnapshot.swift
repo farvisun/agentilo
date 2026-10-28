@@ -163,6 +163,7 @@ public enum Formatters {
 
     public static func duration(_ seconds: TimeInterval) -> String {
         let s = max(0, Int(seconds))
+        if s < 60 { return "\(s)s" }
         let h = s / 3_600, m = (s % 3_600) / 60
         return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
