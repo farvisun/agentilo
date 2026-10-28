@@ -109,6 +109,16 @@ struct PillView: View {
                     .padding(.top, 5)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if state.settings.quietReason(now: state.now) != nil {
+                Image(systemName: "moon.fill")
+                    .font(.system(size: 6.5, weight: .bold))
+                    .foregroundStyle(Palette.tertiary)
+                    .padding(.trailing, 11)
+                    .padding(.top, 4)
+                    .help("Alerts are quiet")
+            }
+        }
     }
 }
 

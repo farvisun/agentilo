@@ -64,6 +64,7 @@ struct ExpandedView: View {
                     state.refreshAll(force: true)
                     state.refreshStats()
                 }
+                QuietMenu(state: state)
                 IconButton(symbol: "gearshape", help: "Settings") { openSettings() }
                 IconButton(symbol: "power", help: "Quit Agentilo") { NSApp.terminate(nil) }
                     .padding(.trailing, 8)
@@ -82,6 +83,42 @@ struct ExpandedView: View {
             }
         }
         .opacity(state.pageCount > 1 ? 1 : 0)
+    }
+}
+
+/// Snooze alerts from the notch.
+private struct QuietMenu: View {
+    var state: AppState
+    @State private var hover = false
+
+    var body: some View {
+        let quiet = state.settings.quietReason(now: state.now) != nil
+        Menu {
+            Button("Snooze for 1 hour") { state.setQuiet(minutes: 60) }
+            Button("Snooze until tomorrow, 8:00") { state.setQuiet(until: Self.tomorrowMorning()) }
+            Button("Quiet until I turn it back on") { state.setQuiet(minutes: nil) }
+            if quiet {
+                Divider()
+                Button("Resume alerts") { state.resumeAlerts() }
+            }
+        } label: {
+            Image(systemName: quiet ? "moon.fill" : "moon")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(quiet ? Palette.amber : (hover ? Color.white : Palette.secondary))
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.white.opacity(hover ? 0.12 : 0)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hover = $0 }
+        .help(quiet ? "Alerts are snoozed" : "Snooze alerts")
+    }
+
+    static func tomorrowMorning(now: Date = Date()) -> Date {
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: now) ?? now
+        return cal.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
     }
 }
 

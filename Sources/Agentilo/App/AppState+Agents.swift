@@ -59,7 +59,8 @@ extension AppState {
         // Out of sight, or the user is looking at the terminal already: let Claude Code ask there
         // without delay. Otherwise the card replaces the alert for this prompt.
         let looking = agents.sessions[key].map(isLookingAt) ?? false
-        guard settings.approvalsEnabled, !notchHidden, !looking else {
+        let silenced = quietReason != nil && !settings.quietAllowUrgent
+        guard settings.approvalsEnabled, !notchHidden, !looking, !silenced else {
             notify(transitions)
             return .none
         }
@@ -102,7 +103,8 @@ extension AppState {
                 alerts.post(NotchAlert(
                     provider: s.provider, symbol: "hand.raised.fill", title: ask,
                     message: [what, s.detail].compactMap { $0 }.joined(separator: " · "),
-                    color: Palette.amber, sound: settings.alertSound ? "Ping" : nil, duration: 6
+                    color: Palette.amber, sound: settings.alertSound ? "Ping" : nil, duration: 6,
+                    urgent: t.to == .waitingPermission
                 ))
             } else if t.to == .done, t.from == .working, t.after >= Self.doneAlertMinimum, settings.agentDoneAlerts {
                 alerts.post(NotchAlert(

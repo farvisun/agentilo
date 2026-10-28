@@ -197,6 +197,79 @@ final class ProxyTests: XCTestCase {
         XCTAssertEqual(s.refreshInterval, 300)
         XCTAssertTrue(s.showTokenStats)
         XCTAssertEqual(s.globalProxy.kind, .system)
+        XCTAssertFalse(s.quietSchedule.enabled)
+        XCTAssertTrue(s.quietAllowUrgent)
+        XCTAssertNil(s.snoozeUntil)
+        XCTAssertFalse(s.quietManual)
+    }
+}
+
+final class QuietModeTests: XCTestCase {
+    private var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+
+    /// 2026-10-26 is a Monday (weekday 2).
+    private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    }
+
+    func testOvernightScheduleWrapsPastMidnight() {
+        let s = QuietSchedule(enabled: true, start: 22 * 60, end: 8 * 60)
+        XCTAssertTrue(s.contains(at(26, 23), calendar: cal))
+        XCTAssertTrue(s.contains(at(27, 7, 59), calendar: cal))
+        XCTAssertFalse(s.contains(at(27, 8), calendar: cal))
+        XCTAssertFalse(s.contains(at(26, 21, 59), calendar: cal))
+    }
+
+    func testDaysCountFromTheEveningTheyStart() {
+        // Weeknights only: Sunday–Thursday evenings (1...5).
+        let s = QuietSchedule(enabled: true, start: 22 * 60, end: 8 * 60, days: [1, 2, 3, 4, 5])
+        XCTAssertTrue(s.contains(at(29, 23), calendar: cal))   // Thursday evening
+        XCTAssertFalse(s.contains(at(30, 23), calendar: cal))  // Friday evening
+        XCTAssertTrue(s.contains(at(30, 7), calendar: cal))    // Friday 07:00 belongs to Thursday night
+        XCTAssertFalse(s.contains(at(31, 7), calendar: cal))   // Saturday 07:00 belongs to Friday night
+    }
+
+    func testSameDayScheduleAndDisabled() {
+        let lunch = QuietSchedule(enabled: true, start: 12 * 60, end: 13 * 60)
+        XCTAssertTrue(lunch.contains(at(26, 12, 30), calendar: cal))
+        XCTAssertFalse(lunch.contains(at(26, 13), calendar: cal))
+        XCTAssertFalse(QuietSchedule(enabled: false, start: 0, end: 0).contains(at(26, 12), calendar: cal))
+        XCTAssertTrue(QuietSchedule(enabled: true, start: 0, end: 0).contains(at(26, 12), calendar: cal))
+    }
+
+    func testQuietCommandArguments() {
+        XCTAssertEqual(QuietRequest(argument: "on"), QuietRequest(action: .on))
+        XCTAssertEqual(QuietRequest(argument: "OFF"), QuietRequest(action: .off))
+        XCTAssertEqual(QuietRequest(argument: "45m"), QuietRequest(action: .snooze, minutes: 45))
+        XCTAssertEqual(QuietRequest(argument: "2h"), QuietRequest(action: .snooze, minutes: 120))
+        XCTAssertEqual(QuietRequest(argument: "30"), QuietRequest(action: .snooze, minutes: 30))
+        XCTAssertNil(QuietRequest(argument: "soon"))
+        XCTAssertNil(QuietRequest(argument: "0m"))
+
+        var s = AppSettings()
+        let now = at(26, 12)
+        QuietRequest(action: .snooze, minutes: 90).apply(to: &s, now: now)
+        XCTAssertEqual(s.snoozeUntil, now.addingTimeInterval(5400))
+        QuietRequest(action: .on).apply(to: &s, now: now)
+        XCTAssertTrue(s.quietManual)
+        QuietRequest(action: .off).apply(to: &s, now: now)
+        XCTAssertFalse(s.quietManual)
+        XCTAssertNil(s.snoozeUntil)
+    }
+
+    func testReasonPrefersManualThenSnoozeThenSchedule() {
+        let now = at(26, 12)
+        let off = QuietSchedule()
+        XCTAssertEqual(QuietMode.reason(now: now, schedule: off, snoozeUntil: nil, manual: true, calendar: cal), .manual)
+        let later = now.addingTimeInterval(3600)
+        XCTAssertEqual(QuietMode.reason(now: now, schedule: off, snoozeUntil: later, manual: false, calendar: cal), .snoozed(until: later))
+        XCTAssertNil(QuietMode.reason(now: now, schedule: off, snoozeUntil: now.addingTimeInterval(-1), manual: false, calendar: cal))
+        let allDay = QuietSchedule(enabled: true, start: 0, end: 0)
+        XCTAssertEqual(QuietMode.reason(now: now, schedule: allDay, snoozeUntil: nil, manual: false, calendar: cal), .schedule)
     }
 }
 

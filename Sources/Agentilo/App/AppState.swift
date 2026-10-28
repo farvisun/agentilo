@@ -82,6 +82,7 @@ final class AppState {
             SettingsStore.save(s)
         }
         settings = s
+        alerts.allows = { [unowned self] alert in self.allowsAlert(alert) }
         resolveProxies()
         // Show something immediately: last response from disk or Codex's own logs.
         for acct in s.accounts where acct.enabled && acct.trackLimits {
@@ -260,6 +261,37 @@ final class AppState {
         for a in found { alerts.post(NotchAlert(a, sound: settings.alertSound, now: now)) }
     }
 
+    // MARK: Quiet hours
+
+    /// Why alerts are silent right now, if they are.
+    var quietReason: QuietReason? { settings.quietReason(now: Date()) }
+
+    func allowsAlert(_ alert: NotchAlert) -> Bool {
+        guard quietReason != nil else { return true }
+        return alert.urgent && settings.quietAllowUrgent
+    }
+
+    /// Snooze from the notch or the CLI. `nil` minutes means until turned off.
+    func setQuiet(minutes: Int?) {
+        if let minutes {
+            settings.quietManual = false
+            settings.snoozeUntil = Date().addingTimeInterval(TimeInterval(minutes * 60))
+        } else {
+            settings.quietManual = true
+        }
+    }
+
+    func setQuiet(until date: Date) {
+        settings.quietManual = false
+        settings.snoozeUntil = date
+    }
+
+    /// Ends a snooze or manual quiet. A schedule stays in effect.
+    func resumeAlerts() {
+        settings.quietManual = false
+        settings.snoozeUntil = nil
+    }
+
     /// Settings → Alerts → "Show a test alert".
     func postTestAlert() {
         let provider = limitAccounts.first?.provider ?? .claude
@@ -344,7 +376,14 @@ final class AppState {
                 return .error(400, "bad request")
             }
             return .json(ApprovalResponse(decision: await requestApproval(request)))
-        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"), (_, "/v1/permission"):
+        case ("POST", "/v1/quiet"):
+            guard (req.headers[HookToken.header] ?? req.headers[HookToken.legacyHeader]) == hookToken else { return .error(401, "bad token") }
+            guard let request = try? APIJSON.decoder.decode(QuietRequest.self, from: req.body) else {
+                return .error(400, "bad request")
+            }
+            if request.action != .status { request.apply(to: &settings) }
+            return .json(QuietStatus(quietReason))
+        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"), (_, "/v1/permission"), (_, "/v1/quiet"):
             return .error(405, "method not allowed")
         default:
             return .error(404, "not found")

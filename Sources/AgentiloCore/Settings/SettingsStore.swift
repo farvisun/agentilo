@@ -115,6 +115,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var approvalsEnabled = false
     /// Seconds a prompt waits in the notch before Claude Code asks in the terminal instead.
     public var approvalTimeout = 60
+    /// Quiet hours: alerts and their sounds are dropped while they last.
+    public var quietSchedule = QuietSchedule()
+    /// Approvals and limit-reached alerts still come through while quiet.
+    public var quietAllowUrgent = true
+    /// Snoozed from the notch or `agentilo quiet 1h`.
+    public var snoozeUntil: Date?
+    /// Quiet until turned off (`agentilo quiet on`, a Focus automation).
+    public var quietManual = false
 
     public init() {}
 
@@ -145,6 +153,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
         agentDoneAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentDoneAlerts) ?? d.agentDoneAlerts
         approvalsEnabled = try c.decodeIfPresent(Bool.self, forKey: .approvalsEnabled) ?? d.approvalsEnabled
         approvalTimeout = try c.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? d.approvalTimeout
+        quietSchedule = try c.decodeIfPresent(QuietSchedule.self, forKey: .quietSchedule) ?? d.quietSchedule
+        quietAllowUrgent = try c.decodeIfPresent(Bool.self, forKey: .quietAllowUrgent) ?? d.quietAllowUrgent
+        snoozeUntil = try c.decodeIfPresent(Date.self, forKey: .snoozeUntil)
+        quietManual = try c.decodeIfPresent(Bool.self, forKey: .quietManual) ?? d.quietManual
+    }
+
+    public func quietReason(now: Date = Date()) -> QuietReason? {
+        QuietMode.reason(now: now, schedule: quietSchedule, snoozeUntil: snoozeUntil, manual: quietManual)
     }
 
     public func providerProxy(_ p: Provider) -> ProviderProxy {

@@ -126,9 +126,10 @@ struct AlertsTab: View {
             .disabled(!state.settings.alertsEnabled)
             Toggle("Play a sound", isOn: $state.settings.alertSound)
                 .disabled(!state.settings.alertsEnabled)
+            QuietHoursSection(state: state)
             Section {
                 Button("Show a test alert") { state.postTestAlert() }
-                Text("Each threshold alerts once per window period. Alerts wait while the notch is open or an app is full screen.")
+                Text("Each threshold alerts once per window period. Alerts wait while the notch is open or an app is full screen, and are dropped during quiet hours.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -145,6 +146,92 @@ struct AlertsTab: View {
                 state.settings.alertThresholds = ts.sorted()
             }
         )
+    }
+}
+
+/// Quiet hours, snooze status and the CLI hook for Focus automations.
+private struct QuietHoursSection: View {
+    @Bindable var state: AppState
+
+    var body: some View {
+        Section("Quiet hours") {
+            Toggle("Silence alerts on a schedule", isOn: $state.settings.quietSchedule.enabled)
+            if state.settings.quietSchedule.enabled {
+                HStack {
+                    DatePicker("From", selection: time(\.start), displayedComponents: .hourAndMinute)
+                    DatePicker("to", selection: time(\.end), displayedComponents: .hourAndMinute)
+                }
+                HStack(spacing: 4) {
+                    Text("Starting on")
+                    Spacer()
+                    ForEach(weekdays, id: \.self) { day in
+                        DayToggle(label: Calendar.current.veryShortWeekdaySymbols[day - 1], isOn: dayBinding(day))
+                    }
+                }
+            }
+            Toggle("Let approvals and limit-reached alerts through", isOn: $state.settings.quietAllowUrgent)
+            HStack {
+                Text(statusText).foregroundStyle(.secondary)
+                Spacer()
+                if state.settings.quietManual || (state.settings.snoozeUntil.map { $0 > Date() } ?? false) {
+                    Button("Resume alerts") { state.resumeAlerts() }
+                }
+            }
+            Text("To follow a macOS Focus, add a Shortcuts automation for that Focus that runs the shell command `agentilo quiet on` when it turns on and `agentilo quiet off` when it turns off. Install the command in Settings → Agents.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Weekdays in the user's order (Monday first where that is the custom).
+    private var weekdays: [Int] {
+        let first = Calendar.current.firstWeekday
+        return (0..<7).map { (first - 1 + $0) % 7 + 1 }
+    }
+
+    private var statusText: String {
+        switch state.quietReason {
+        case .manual: "Quiet until you turn it off"
+        case .snoozed(let until): "Snoozed until \(until.formatted(date: .omitted, time: .shortened))"
+        case .schedule: "Quiet hours are on now"
+        case nil: "Alerts are on"
+        }
+    }
+
+    private func time(_ key: WritableKeyPath<QuietSchedule, Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                let m = state.settings.quietSchedule[keyPath: key]
+                return Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                state.settings.quietSchedule[keyPath: key] = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            }
+        )
+    }
+
+    private func dayBinding(_ day: Int) -> Binding<Bool> {
+        Binding(
+            get: { state.settings.quietSchedule.days.contains(day) },
+            set: { on in
+                if on { state.settings.quietSchedule.days.insert(day) } else { state.settings.quietSchedule.days.remove(day) }
+            }
+        )
+    }
+}
+
+private struct DayToggle: View {
+    var label: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button(label) { isOn.toggle() }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .semibold))
+            .frame(width: 22, height: 22)
+            .background(Circle().fill(isOn ? Color.accentColor : Color.secondary.opacity(0.15)))
+            .foregroundStyle(isOn ? Color.white : Color.primary)
     }
 }
 
