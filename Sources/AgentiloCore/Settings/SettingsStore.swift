@@ -268,6 +268,10 @@ public enum AccountDetector {
         for d in codexDirs where isDir(d) && fm.fileExists(atPath: d + "/auth.json") { add(.codex, d) }
 
         if CursorCredentials.exists(home: CursorCredentials.defaultHome) { add(.cursor, CursorCredentials.defaultHome) }
+
+        // Gemini CLI: ~/.gemini once signed in.
+        let gemini = "\(home)/.gemini"
+        if isDir(gemini), GeminiCredentials.exists(home: gemini) { add(.gemini, gemini) }
         return found
     }
 
@@ -285,6 +289,8 @@ public enum AccountDetector {
         case .cursor:
             if let email = CursorCredentials.value(forKey: "cursorAuth/cachedEmail", home: path) { return email }
             return "Cursor"
+        case .gemini:
+            return GeminiCredentials.email(home: path) ?? "Gemini"
         }
         return (path as NSString).lastPathComponent
     }

@@ -152,7 +152,7 @@ extension AppState {
         let pane = session.herdr?.pane
         Task.detached(priority: .userInitiated) {
             if let pane { HerdrSource.focus(pane: pane) }
-            await MainActor.run {
+            _ = await MainActor.run {
                 NSRunningApplication.runningApplications(withBundleIdentifier: Self.ghosttyBundleID).first?.activate()
             }
         }

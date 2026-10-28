@@ -15,9 +15,13 @@ public enum TranscriptTail {
         var claudeID: String?
         var claudeParts: [String] = []
         for line in lines.reversed() {
-            guard line.contains("\"assistant\"") || line.contains("agent_message") || line.contains("task_complete"),
+            guard line.contains("\"assistant\"") || line.contains("agent_message") || line.contains("task_complete")
+                    || line.contains("\"gemini\""),
                   let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
             if let reply = codexReply(obj) { return reply }
+            // Gemini: one message per line, the reply text as a plain string.
+            if obj["type"] as? String == "gemini", let text = obj["content"] as? String,
+               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return text }
             // Claude streams one content block per line, all sharing the message id.
             if obj["type"] as? String == "assistant", let message = obj["message"] as? [String: Any] {
                 let id = message["id"] as? String
@@ -55,6 +59,7 @@ public enum TranscriptTail {
 
     /// Where a session's transcript lives when only its id is known.
     /// Claude: `<home>/projects/<project>/<id>.jsonl`. Codex: `<home>/sessions/YYYY/MM/DD/rollout-…-<id>.jsonl`.
+    /// Gemini: `<home>/tmp/<project>/chats/session-…-<id prefix>.jsonl`.
     public static func locate(sessionID: String, provider: Provider, homes: [URL], fileManager fm: FileManager = .default) -> URL? {
         for home in homes {
             switch provider {
@@ -73,6 +78,15 @@ public enum TranscriptTail {
                     let dir = home.appendingPathComponent(String(format: "sessions/%04d/%02d/%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0))
                     let hit = ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? []).first { $0.hasSuffix("\(sessionID).jsonl") }
                     if let hit { return dir.appendingPathComponent(hit) }
+                }
+            case .gemini:
+                // `tmp/<project>/chats/session-<time>-<first 8 of the id>.jsonl`.
+                let tmp = home.appendingPathComponent("tmp")
+                let suffix = "-\(sessionID.prefix(8)).jsonl"
+                for dir in (try? fm.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil)) ?? [] {
+                    let chats = dir.appendingPathComponent("chats")
+                    let hits = ((try? fm.contentsOfDirectory(atPath: chats.path)) ?? []).filter { $0.hasSuffix(suffix) }.sorted()
+                    if let last = hits.last { return chats.appendingPathComponent(last) }
                 }
             case .cursor:
                 break

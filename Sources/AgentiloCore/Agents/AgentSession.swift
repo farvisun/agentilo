@@ -144,7 +144,7 @@ public struct AgentSessionStore: Equatable, Sendable {
 
     static func notificationState(_ e: AgentEvent) -> AgentState {
         switch e.notificationType {
-        case "permission_prompt": return .waitingPermission
+        case "permission_prompt", "ToolPermission": return .waitingPermission
         case "idle_prompt", "elicitation_dialog": return .waitingInput
         default:
             let text = (e.detail ?? "").lowercased()

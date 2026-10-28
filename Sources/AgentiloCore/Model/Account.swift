@@ -4,6 +4,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
     case claude
     case codex
     case cursor
+    case gemini
 
     public var id: String { rawValue }
 
@@ -12,6 +13,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         case .claude: "Claude"
         case .codex: "Codex"
         case .cursor: "Cursor"
+        case .gemini: "Gemini"
         }
     }
 
@@ -21,6 +23,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         case .claude: URL(string: "https://api.anthropic.com/api/oauth/usage")!
         case .codex: URL(string: "https://chatgpt.com/backend-api/wham/usage")!
         case .cursor: URL(string: "https://cursor.com/api/usage-summary")!
+        case .gemini: URL(string: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")!
         }
     }
 }

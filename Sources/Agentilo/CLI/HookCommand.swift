@@ -1,7 +1,7 @@
 import AgentiloCore
 import Foundation
 
-/// `agentilo hook <agent> <event>`: called by Claude Code and Codex hooks with the hook's
+/// `agentilo hook <agent> <event>`: called by Claude Code, Codex and Gemini CLI hooks with the hook's
 /// JSON on stdin. Forwards it to the running app and always exits 0 quickly, so an agent
 /// never slows down or fails because Agentilo is closed.
 enum HookCommand {

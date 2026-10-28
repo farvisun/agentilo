@@ -42,8 +42,8 @@ public enum Pricing {
         return (input * r.input + output * r.output + cacheWrite * r.cacheWrite + cacheRead * r.cacheRead) / 1_000_000
     }
 
-    /// OpenAI counts cached tokens inside `input`, and reasoning inside `output`.
-    public static func openAICost(model: String, input: Double, cached: Double, output: Double) -> Double? {
+    /// For OpenAI and Google, which count cached tokens inside `input` (and reasoning inside `output`).
+    public static func cachedInInputCost(model: String, input: Double, cached: Double, output: Double) -> Double? {
         guard let r = rate(for: model) else { return nil }
         return (max(0, input - cached) * r.input + cached * r.cacheRead + output * r.output) / 1_000_000
     }

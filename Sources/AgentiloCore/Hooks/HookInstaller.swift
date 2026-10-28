@@ -1,8 +1,9 @@
 import Foundation
 
 /// Adds and removes Agentilo' own entries in an agent's hook config, leaving everything
-/// else as it was. Claude Code keeps hooks in `<home>/settings.json`, Codex in `<home>/hooks.json`;
-/// both use `{"hooks": {"<Event>": [{"matcher"?, "hooks": [{"type": "command", "command"}]}]}}`.
+/// else as it was. Claude Code and Gemini CLI keep hooks in `<home>/settings.json`, Codex in
+/// `<home>/hooks.json`; all use `{"hooks": {"<Event>": [{"matcher"?, "hooks": [{"type": "command", "command"}]}]}}`.
+/// Gemini names events differently, wants a name per hook and counts timeouts in milliseconds.
 public enum HookInstaller {
     /// Trailing shell comment that marks our commands.
     public static let marker = "# agentilo"
@@ -26,6 +27,7 @@ public enum HookInstaller {
         switch account.provider {
         case .claude: account.homeURL.appendingPathComponent("settings.json")
         case .codex: account.homeURL.appendingPathComponent("hooks.json")
+        case .gemini: account.homeURL.appendingPathComponent("settings.json")
         case .cursor: nil
         }
     }
@@ -36,6 +38,8 @@ public enum HookInstaller {
             [.sessionStart, .prompt, .preTool, .postTool, .notification, .stop, .sessionEnd] + (approvals ? [.permission] : [])
         case .codex:
             [.sessionStart, .prompt, .preTool, .postTool, .stop]
+        case .gemini:
+            [.sessionStart, .prompt, .preTool, .postTool, .notification, .stop, .sessionEnd]
         case .cursor:
             []
         }
@@ -45,9 +49,11 @@ public enum HookInstaller {
         "'\(executable.replacingOccurrences(of: "'", with: "'\\''"))' hook \(provider.rawValue) \(event.rawValue) \(marker)"
     }
 
-    /// Seconds the agent waits for our hook. Approvals wait for the user; the rest return at once.
-    public static func timeout(for event: AgentEventKind, approvalTimeout: Int) -> Int {
-        event == .permission ? approvalTimeout + 10 : 5
+    /// How long the agent waits for our hook: seconds, or milliseconds for Gemini.
+    /// Approvals wait for the user; the rest return at once.
+    public static func timeout(for event: AgentEventKind, approvalTimeout: Int, provider: Provider = .claude) -> Int {
+        let seconds = event == .permission ? approvalTimeout + 10 : 5
+        return provider == .gemini ? seconds * 1000 : seconds
     }
 
     // MARK: Status
@@ -61,7 +67,7 @@ public enum HookInstaller {
         let ours = entries(in: root)
         if ours.isEmpty { return .notInstalled }
         let wanted = events(for: account.provider, approvals: approvals).map {
-            "\(command(executable: executable, provider: account.provider, event: $0))|\(timeout(for: $0, approvalTimeout: approvalTimeout))"
+            "\(command(executable: executable, provider: account.provider, event: $0))|\(timeout(for: $0, approvalTimeout: approvalTimeout, provider: account.provider))"
         }
         let have = ours.map { "\($0.command)|\($0.timeout ?? 0)" }
         return Set(have) == Set(wanted) && have.count == wanted.count ? .installed : .outdated
@@ -112,13 +118,21 @@ public enum HookInstaller {
         var root = root
         var hooks = (root["hooks"] as? [String: Any]) ?? [:]
         for event in events(for: provider, approvals: approvals) {
-            var groups = (hooks[event.hookName] as? [[String: Any]]) ?? []
-            groups.append(["hooks": [[
+            let name = event.hookName(for: provider)
+            var groups = (hooks[name] as? [[String: Any]]) ?? []
+            var hook: [String: Any] = [
                 "type": "command",
                 "command": command(executable: executable, provider: provider, event: event),
-                "timeout": timeout(for: event, approvalTimeout: approvalTimeout),
-            ]]])
-            hooks[event.hookName] = groups
+                "timeout": timeout(for: event, approvalTimeout: approvalTimeout, provider: provider),
+            ]
+            var group: [String: Any] = [:]
+            if provider == .gemini {
+                hook["name"] = "agentilo-\(event.rawValue)"
+                group["matcher"] = "*"
+            }
+            group["hooks"] = [hook]
+            groups.append(group)
+            hooks[name] = groups
         }
         root["hooks"] = hooks
         return root
@@ -169,6 +183,12 @@ public enum HookInstaller {
         let legacyBak = url.appendingPathExtension("agentlimits-bak")
         guard fm.fileExists(atPath: url.path), !fm.fileExists(atPath: bak.path), !fm.fileExists(atPath: legacyBak.path) else { return }
         try fm.copyItem(at: url, to: bak)
+    }
+
+    /// Gemini CLI runs hooks unless `hooksConfig.enabled` is false in `settings.json`.
+    public static func geminiHooksEnabled(home: URL) -> Bool {
+        let root = (try? read(home.appendingPathComponent("settings.json"))) ?? [:]
+        return ((root["hooksConfig"] as? [String: Any])?["enabled"] as? Bool) ?? true
     }
 
     /// Codex runs hooks only with `hooks = true` under `[features]` in `config.toml`.

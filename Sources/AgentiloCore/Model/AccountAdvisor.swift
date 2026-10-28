@@ -54,6 +54,8 @@ public enum AccountAdvisor {
             return home == Paths.expand("~/.claude") ? "claude" : "CLAUDE_CONFIG_DIR=\(shellPath(home)) claude"
         case .codex:
             return home == Paths.expand("~/.codex") ? "codex" : "CODEX_HOME=\(shellPath(home)) codex"
+        case .gemini:
+            return home == Paths.expand("~/.gemini") ? "gemini" : nil
         case .cursor:
             return nil
         }
