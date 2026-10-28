@@ -11,10 +11,14 @@ struct NotchAlert: Identifiable, Equatable {
     var symbol = "bell.fill"
     var title: String
     var message: String
+    /// Up to two more lines, e.g. the agent's last reply. Makes the alert taller.
+    var body: String?
     var color: Color
     /// System sound name, or nil for silence.
     var sound: String?
     var duration: TimeInterval = 4.5
+    /// Still shown during quiet hours (approvals, limit reached) when the user allows it.
+    var urgent = false
 }
 
 /// Shows queued alerts one at a time. Alerts wait while the notch is expanded
@@ -28,8 +32,11 @@ final class AlertCenter {
     @ObservationIgnored private var queue: [NotchAlert] = []
     @ObservationIgnored private var holds: Set<Hold> = []
     @ObservationIgnored private var dismissTask: Task<Void, Never>?
+    /// Decides whether an alert may be shown now; quiet hours drop the rest.
+    @ObservationIgnored var allows: (NotchAlert) -> Bool = { _ in true }
 
     func post(_ alert: NotchAlert) {
+        guard allows(alert) else { return }
         queue.append(alert)
         pump()
     }
@@ -58,7 +65,10 @@ final class AlertCenter {
     }
 
     private func pump() {
-        guard current == nil, holds.isEmpty, !queue.isEmpty else { return }
+        guard current == nil, holds.isEmpty else { return }
+        // Quiet hours may have started while these waited (e.g. behind a full-screen app).
+        queue.removeAll { !allows($0) }
+        guard !queue.isEmpty else { return }
         let next = queue.removeFirst()
         withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) { current = next }
         if let sound = next.sound { NSSound(named: NSSound.Name(sound))?.play() }
@@ -86,7 +96,8 @@ extension NotchAlert {
             title: alert.title,
             message: "\(alert.message(now: now)) · \(alert.accountLabel)",
             color: color,
-            sound: sound ? tone : nil
+            sound: sound ? tone : nil,
+            urgent: alert.kind == .limitReached
         )
     }
 }

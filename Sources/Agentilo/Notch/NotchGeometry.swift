@@ -1,10 +1,10 @@
 import AppKit
 
 /// What the notch is drawing right now.
-enum NotchMode {
+enum NotchMode: Equatable {
     case collapsed
-    /// An alert hangs below the collapsed pill.
-    case alert
+    /// An alert hangs below the collapsed pill; tall ones carry two more lines.
+    case alert(tall: Bool)
     case expanded
     /// A permission prompt waits for Allow / Deny.
     case approval
@@ -17,6 +17,7 @@ enum NotchGeometry {
     static let expandedContentHeight: CGFloat = 214
     static let alertWidth: CGFloat = 400
     static let alertHeight: CGFloat = 52
+    static let tallAlertHeight: CGFloat = 80
     static let approvalWidth: CGFloat = 470
     static let approvalHeight: CGFloat = 116
     /// The panel is always this big; only the drawn shape changes size.
@@ -46,14 +47,14 @@ enum NotchGeometry {
         CGSize(width: max(expandedWidth, l.notchWidth + wing * 2), height: l.notchHeight + expandedContentHeight)
     }
 
-    static func alertSize(_ l: NotchLayout) -> CGSize {
-        CGSize(width: max(alertWidth, l.notchWidth + wing * 2), height: l.notchHeight + alertHeight)
+    static func alertSize(_ l: NotchLayout, tall: Bool = false) -> CGSize {
+        CGSize(width: max(alertWidth, l.notchWidth + wing * 2), height: l.notchHeight + (tall ? tallAlertHeight : alertHeight))
     }
 
     static func size(_ mode: NotchMode, _ l: NotchLayout) -> CGSize {
         switch mode {
         case .collapsed: collapsedSize(l)
-        case .alert: alertSize(l)
+        case .alert(let tall): alertSize(l, tall: tall)
         case .expanded: expandedSize(l)
         case .approval:
             CGSize(width: max(approvalWidth, l.notchWidth + wing * 2), height: l.notchHeight + approvalHeight)

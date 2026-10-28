@@ -15,6 +15,8 @@ struct AgentsTab: View {
                     .disabled(HerdrSource.executable == nil)
                 Toggle("Alert when an agent needs input or approval", isOn: $state.settings.agentAttentionAlerts)
                 Toggle("Alert when an agent finishes a longer turn", isOn: $state.settings.agentDoneAlerts)
+                Toggle("Show the start of the agent's last reply", isOn: $state.settings.agentDoneSummary)
+                Toggle("Show a working agent's turn time in the collapsed notch", isOn: $state.settings.pillShowsAgents)
                 Text(HerdrSource.executable == nil
                      ? "herdr is not installed. Hooks below still report Claude Code and Codex sessions."
                      : "herdr reports every agent pane (working, blocked, idle); hooks add the current tool and approval details. Click an agent in the notch to jump to its pane in Ghostty.")

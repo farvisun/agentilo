@@ -233,6 +233,7 @@
       cmd: "curl -s 127.0.0.1:6737/v1/limits | jq '.accounts[1].windows[1]'",
       out: json({ kind: "weekly", title: "Weekly", usedPercent: 81, remainingPercent: 19, resetsAt: iso(codexReset.getTime()), pace: "runsOut", runsOutAt: iso(runOutAt.getTime()) }),
     },
+    { cmd: "agentilo quiet 45m", out: `<span class="c">Snoozed until ${new Date(Date.now() + 45 * 60e3).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>` },
   ];
   let typed = false;
   async function typeTerminal() {

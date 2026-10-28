@@ -39,11 +39,16 @@ public struct AgentEvent: Codable, Equatable, Sendable {
     /// Claude's notification type: permission_prompt, idle_prompt, ...
     public var notificationType: String?
     public var herdr: HerdrLocation?
+    /// The agent's final reply, when the Stop hook carries it (Claude Code 2.1.47+).
+    public var lastMessage: String?
+    /// The session transcript, for reading the reply when the hook does not carry it.
+    public var transcriptPath: String?
     public var at: Date
 
     public init(
         agent: String, kind: AgentEventKind, sessionID: String? = nil, cwd: String? = nil, tool: String? = nil,
-        detail: String? = nil, notificationType: String? = nil, herdr: HerdrLocation? = nil, at: Date = Date()
+        detail: String? = nil, notificationType: String? = nil, herdr: HerdrLocation? = nil,
+        lastMessage: String? = nil, transcriptPath: String? = nil, at: Date = Date()
     ) {
         self.agent = agent
         self.kind = kind
@@ -53,6 +58,8 @@ public struct AgentEvent: Codable, Equatable, Sendable {
         self.detail = detail
         self.notificationType = notificationType
         self.herdr = herdr
+        self.lastMessage = lastMessage
+        self.transcriptPath = transcriptPath
         self.at = at
     }
 
@@ -73,7 +80,11 @@ public struct AgentEvent: Codable, Equatable, Sendable {
             tool: tool,
             detail: detail,
             notificationType: json["notification_type"] as? String,
-            herdr: HerdrLocation(environment: env)
+            herdr: HerdrLocation(environment: env),
+            // Claude Code and Codex name it differently; keep it bounded either way.
+            lastMessage: ["last_assistant_message", "last-assistant-message", "last_agent_message"]
+                .lazy.compactMap { json[$0] as? String }.first { !$0.isEmpty }.map { $0.prefixed(4000) },
+            transcriptPath: json["transcript_path"] as? String
         )
     }
 

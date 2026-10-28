@@ -197,6 +197,79 @@ final class ProxyTests: XCTestCase {
         XCTAssertEqual(s.refreshInterval, 300)
         XCTAssertTrue(s.showTokenStats)
         XCTAssertEqual(s.globalProxy.kind, .system)
+        XCTAssertFalse(s.quietSchedule.enabled)
+        XCTAssertTrue(s.quietAllowUrgent)
+        XCTAssertNil(s.snoozeUntil)
+        XCTAssertFalse(s.quietManual)
+    }
+}
+
+final class QuietModeTests: XCTestCase {
+    private var cal: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+
+    /// 2026-10-26 is a Monday (weekday 2).
+    private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    }
+
+    func testOvernightScheduleWrapsPastMidnight() {
+        let s = QuietSchedule(enabled: true, start: 22 * 60, end: 8 * 60)
+        XCTAssertTrue(s.contains(at(26, 23), calendar: cal))
+        XCTAssertTrue(s.contains(at(27, 7, 59), calendar: cal))
+        XCTAssertFalse(s.contains(at(27, 8), calendar: cal))
+        XCTAssertFalse(s.contains(at(26, 21, 59), calendar: cal))
+    }
+
+    func testDaysCountFromTheEveningTheyStart() {
+        // Weeknights only: Sunday–Thursday evenings (1...5).
+        let s = QuietSchedule(enabled: true, start: 22 * 60, end: 8 * 60, days: [1, 2, 3, 4, 5])
+        XCTAssertTrue(s.contains(at(29, 23), calendar: cal))   // Thursday evening
+        XCTAssertFalse(s.contains(at(30, 23), calendar: cal))  // Friday evening
+        XCTAssertTrue(s.contains(at(30, 7), calendar: cal))    // Friday 07:00 belongs to Thursday night
+        XCTAssertFalse(s.contains(at(31, 7), calendar: cal))   // Saturday 07:00 belongs to Friday night
+    }
+
+    func testSameDayScheduleAndDisabled() {
+        let lunch = QuietSchedule(enabled: true, start: 12 * 60, end: 13 * 60)
+        XCTAssertTrue(lunch.contains(at(26, 12, 30), calendar: cal))
+        XCTAssertFalse(lunch.contains(at(26, 13), calendar: cal))
+        XCTAssertFalse(QuietSchedule(enabled: false, start: 0, end: 0).contains(at(26, 12), calendar: cal))
+        XCTAssertTrue(QuietSchedule(enabled: true, start: 0, end: 0).contains(at(26, 12), calendar: cal))
+    }
+
+    func testQuietCommandArguments() {
+        XCTAssertEqual(QuietRequest(argument: "on"), QuietRequest(action: .on))
+        XCTAssertEqual(QuietRequest(argument: "OFF"), QuietRequest(action: .off))
+        XCTAssertEqual(QuietRequest(argument: "45m"), QuietRequest(action: .snooze, minutes: 45))
+        XCTAssertEqual(QuietRequest(argument: "2h"), QuietRequest(action: .snooze, minutes: 120))
+        XCTAssertEqual(QuietRequest(argument: "30"), QuietRequest(action: .snooze, minutes: 30))
+        XCTAssertNil(QuietRequest(argument: "soon"))
+        XCTAssertNil(QuietRequest(argument: "0m"))
+
+        var s = AppSettings()
+        let now = at(26, 12)
+        QuietRequest(action: .snooze, minutes: 90).apply(to: &s, now: now)
+        XCTAssertEqual(s.snoozeUntil, now.addingTimeInterval(5400))
+        QuietRequest(action: .on).apply(to: &s, now: now)
+        XCTAssertTrue(s.quietManual)
+        QuietRequest(action: .off).apply(to: &s, now: now)
+        XCTAssertFalse(s.quietManual)
+        XCTAssertNil(s.snoozeUntil)
+    }
+
+    func testReasonPrefersManualThenSnoozeThenSchedule() {
+        let now = at(26, 12)
+        let off = QuietSchedule()
+        XCTAssertEqual(QuietMode.reason(now: now, schedule: off, snoozeUntil: nil, manual: true, calendar: cal), .manual)
+        let later = now.addingTimeInterval(3600)
+        XCTAssertEqual(QuietMode.reason(now: now, schedule: off, snoozeUntil: later, manual: false, calendar: cal), .snoozed(until: later))
+        XCTAssertNil(QuietMode.reason(now: now, schedule: off, snoozeUntil: now.addingTimeInterval(-1), manual: false, calendar: cal))
+        let allDay = QuietSchedule(enabled: true, start: 0, end: 0)
+        XCTAssertEqual(QuietMode.reason(now: now, schedule: allDay, snoozeUntil: nil, manual: false, calendar: cal), .schedule)
     }
 }
 
@@ -460,6 +533,72 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(e.detail, "npm test")
         XCTAssertEqual(e.herdr?.pane, "w:p9")
         XCTAssertEqual(AgentEvent.toolSummary(tool: "Edit", input: ["file_path": "/a/b/AppState.swift"]), "AppState.swift")
+    }
+}
+
+final class TurnSummaryTests: XCTestCase {
+    func testClaudeTranscriptGivesTheLastMessageText() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "claude_reply", withExtension: "jsonl", subdirectory: "Fixtures"))
+        let reply = try XCTUnwrap(TranscriptTail.lastReply(file: url))
+        XCTAssertTrue(reply.hasPrefix("## Fixed"))
+        XCTAssertTrue(reply.hasSuffix("Run `make test` to confirm."))
+        XCTAssertEqual(
+            ReplyExcerpt.make(reply),
+            "Fixed. The build passes now. I removed the stale build/ cache in Makefile. Run make test to confirm."
+        )
+    }
+
+    func testCodexTranscriptPrefersTaskComplete() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "codex_reply", withExtension: "jsonl", subdirectory: "Fixtures"))
+        XCTAssertEqual(TranscriptTail.lastReply(file: url), "Done: added the /health route and a test.")
+    }
+
+    func testExcerptDropsCodeAndCaps() {
+        let text = "Here is the fix:\n```swift\nlet x = 1\n```\n- first\n- second\n" + String(repeating: "word ", count: 200)
+        let e = ReplyExcerpt.make(text, limit: 60)!
+        XCTAssertTrue(e.hasPrefix("Here is the fix: first second word"))
+        XCTAssertFalse(e.contains("let x"))
+        XCTAssertEqual(e.count, 60)
+        XCTAssertNil(ReplyExcerpt.make("```\ncode only\n```"))
+    }
+
+    func testShortTurnsShowSeconds() {
+        XCTAssertEqual(Formatters.duration(22), "22s")
+        XCTAssertEqual(Formatters.duration(240), "4m")
+        XCTAssertEqual(Formatters.duration(3_900), "1h 5m")
+    }
+
+    func testStopHookCarriesReplyAndTurnCounters() {
+        var store = AgentSessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        store.apply(AgentEvent(agent: "claude", kind: .prompt, sessionID: "s", at: t0))
+        store.apply(AgentEvent(agent: "claude", kind: .preTool, sessionID: "s", tool: "Bash", at: t0 + 5))
+        store.apply(AgentEvent(agent: "claude", kind: .preTool, sessionID: "s", tool: "Edit", at: t0 + 9))
+        store.apply(AgentEvent(agent: "claude", kind: .permission, sessionID: "s", at: t0 + 10))
+        store.apply(AgentEvent(agent: "claude", kind: .postTool, sessionID: "s", at: t0 + 20))
+        var s = store.sessions["claude:s"]!
+        XCTAssertEqual(s.turnStartedAt, t0, "a permission wait keeps the turn")
+        XCTAssertEqual(s.toolCalls, 2)
+        store.apply(AgentEvent(agent: "claude", kind: .stop, sessionID: "s", lastMessage: "**Done.** All green.", at: t0 + 30))
+        s = store.sessions["claude:s"]!
+        XCTAssertEqual(s.lastReply, "Done. All green.")
+        store.apply(AgentEvent(agent: "claude", kind: .prompt, sessionID: "s", at: t0 + 60))
+        s = store.sessions["claude:s"]!
+        XCTAssertEqual(s.turnStartedAt, t0 + 60)
+        XCTAssertEqual(s.toolCalls, 0)
+        XCTAssertNil(s.lastReply)
+    }
+
+    func testHookInputReadsReplyFieldsOfEitherAgent() {
+        let claude = AgentEvent.from(
+            hookInput: ["session_id": "a", "last_assistant_message": "All set.", "transcript_path": "/t/a.jsonl"],
+            agent: "claude", kind: .stop, environment: [:]
+        )
+        XCTAssertEqual(claude.lastMessage, "All set.")
+        XCTAssertEqual(claude.transcriptPath, "/t/a.jsonl")
+        let codex = AgentEvent.from(hookInput: ["last-assistant-message": "Done."], agent: "codex", kind: .stop, environment: [:])
+        XCTAssertEqual(codex.lastMessage, "Done.")
+        XCTAssertNil(AgentEvent.from(hookInput: ["last_assistant_message": ""], agent: "claude", kind: .stop, environment: [:]).lastMessage)
     }
 }
 

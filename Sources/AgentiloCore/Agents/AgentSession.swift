@@ -41,6 +41,13 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     public var lastEventAt: Date
     /// Last time a hook (not herdr) reported on this session.
     public var lastHookAt: Date?
+    /// When the current (or last) turn began; permission waits do not reset it.
+    public var turnStartedAt: Date?
+    /// Tool calls in the current turn.
+    public var toolCalls = 0
+    /// Excerpt of the agent's last reply, once the turn finished.
+    public var lastReply: String?
+    public var transcriptPath: String?
 
     public var provider: Provider? { Provider(rawValue: agent) }
     public var project: String { cwd.map { ($0 as NSString).lastPathComponent } ?? agent }
@@ -100,6 +107,7 @@ public struct AgentSessionStore: Equatable, Sendable {
         s.herdr = e.herdr ?? s.herdr
         s.lastEventAt = e.at
         s.lastHookAt = e.at
+        s.transcriptPath = e.transcriptPath ?? s.transcriptPath
 
         let next: AgentState
         switch e.kind {
@@ -109,10 +117,12 @@ public struct AgentSessionStore: Equatable, Sendable {
             next = .working
             s.tool = nil
             s.detail = e.detail
+            Self.startTurn(&s, at: e.at)
         case .preTool:
             next = .working
             s.tool = e.tool
             s.detail = e.detail
+            s.toolCalls += 1
         case .postTool:
             next = .working
         case .notification:
@@ -125,6 +135,7 @@ public struct AgentSessionStore: Equatable, Sendable {
         case .stop:
             next = .done
             s.tool = nil
+            s.lastReply = e.lastMessage.flatMap { ReplyExcerpt.make($0) } ?? s.lastReply
         case .sessionEnd:
             next = .idle
         }
@@ -196,6 +207,17 @@ public struct AgentSessionStore: Equatable, Sendable {
         return out
     }
 
+    /// The reply read from the transcript after the turn ended.
+    public mutating func setReply(_ id: String, _ reply: String) {
+        sessions[id]?.lastReply = reply
+    }
+
+    static func startTurn(_ s: inout AgentSession, at: Date) {
+        s.turnStartedAt = at
+        s.toolCalls = 0
+        s.lastReply = nil
+    }
+
     // MARK: Housekeeping
 
     /// Viewing a finished session (or its pane being focused) makes it plain idle.
@@ -213,6 +235,10 @@ public struct AgentSessionStore: Equatable, Sendable {
     private mutating func set(_ s: inout AgentSession, _ next: AgentState, previous: AgentState?, at: Date) -> [AgentTransition] {
         let changed = previous != next
         let since = s.stateSince
+        // herdr sees turns start without a prompt hook; so does a hook session we just met.
+        if changed, next == .working, previous != .waitingPermission, s.turnStartedAt.map({ $0 < since }) ?? true {
+            Self.startTurn(&s, at: at)
+        }
         if changed { s.state = next; s.stateSince = at }
         sessions[s.id] = s
         guard changed else { return [] }

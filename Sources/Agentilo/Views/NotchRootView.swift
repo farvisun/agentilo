@@ -66,10 +66,11 @@ struct PillView: View {
     var body: some View {
         let l = state.layout
         let items = state.pillItems
+        let progress = state.settings.pillShowsAgents ? WorkProgress(state.agents) : nil
         HStack(spacing: 0) {
             if items.count >= 2 {
                 // Nudge inward: the shape's concave top corner eats into the outer edge.
-                CompactItem(state: state, account: items[0].account, window: items[0].window)
+                CompactItem(state: state, account: items[0].account, window: items[0].window, progress: progress)
                     .padding(.leading, 6)
                     .frame(width: NotchGeometry.wing)
                 Spacer().frame(width: l.notchWidth)
@@ -79,7 +80,9 @@ struct PillView: View {
             } else {
                 let item = items.first
                 Group {
-                    if let provider = item?.account.provider {
+                    if let progress {
+                        AgentProgressView(progress: progress, showsTime: true)
+                    } else if let provider = item?.account.provider {
                         ProviderIcon(provider: provider, size: 13)
                     }
                 }
@@ -109,6 +112,16 @@ struct PillView: View {
                     .padding(.top, 5)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if state.settings.quietReason(now: state.now) != nil {
+                Image(systemName: "moon.fill")
+                    .font(.system(size: 6.5, weight: .bold))
+                    .foregroundStyle(Palette.tertiary)
+                    .padding(.trailing, 11)
+                    .padding(.top, 4)
+                    .help("Alerts are quiet")
+            }
+        }
     }
 }
 
@@ -127,15 +140,89 @@ private struct AttentionDot: View {
     }
 }
 
+/// Agents working right now, for the pill: the longest-running turn sets the time.
+struct WorkProgress: Equatable {
+    var since: Date
+    var provider: Provider?
+    var count: Int
+
+    init?(_ store: AgentSessionStore) {
+        let working = store.sessions.values.filter { $0.state == .working }
+        guard let first = working.min(by: { ($0.turnStartedAt ?? $0.stateSince) < ($1.turnStartedAt ?? $1.stateSince) }) else { return nil }
+        since = first.turnStartedAt ?? first.stateSince
+        provider = first.provider
+        count = working.count
+    }
+}
+
+/// A spinning arc in the agent's color, the turn time, and a count when several work at once.
+private struct AgentProgressView: View {
+    var progress: WorkProgress
+    var showsTime: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Spinner(color: progress.provider?.tint ?? Palette.green)
+                .frame(width: 11, height: 11)
+                .overlay(alignment: .topTrailing) {
+                    if progress.count > 1 {
+                        Text("\(progress.count)")
+                            .font(.system(size: 7, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.black)
+                            .padding(.horizontal, 2.5)
+                            .background(Capsule().fill(Color.white.opacity(0.9)))
+                            .offset(x: 6, y: -5)
+                    }
+                }
+            if showsTime {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Text(Self.short(ctx.date.timeIntervalSince(progress.since)))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(Palette.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .help(progress.count > 1 ? "\(progress.count) agents working" : "Agent working")
+    }
+
+    /// "12s", "4m", "1h05".
+    static func short(_ t: TimeInterval) -> String {
+        let s = max(0, Int(t))
+        if s < 60 { return "\(s)s" }
+        if s < 3600 { return "\(s / 60)m" }
+        return String(format: "%dh%02d", s / 3600, (s % 3600) / 60)
+    }
+}
+
+private struct Spinner: View {
+    var color: Color
+    @State private var spin = false
+
+    var body: some View {
+        Circle()
+            .trim(from: 0.08, to: 0.78)
+            .stroke(color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+            .rotationEffect(.degrees(spin ? 360 : 0))
+            .animation(.linear(duration: 0.9).repeatForever(autoreverses: false), value: spin)
+            .onAppear { spin = true }
+    }
+}
+
 /// Provider glyph + usage, sized for one wing.
 private struct CompactItem: View {
     var state: AppState
     var account: Account
     var window: UsageWindow
+    var progress: WorkProgress?
 
     var body: some View {
         HStack(spacing: 3) {
-            ProviderIcon(provider: account.provider, size: 12)
+            if let progress {
+                AgentProgressView(progress: progress, showsTime: false)
+            } else {
+                ProviderIcon(provider: account.provider, size: 12)
+            }
             UsageGauge(state: state, account: account, window: window, ringSize: 12)
         }
     }
