@@ -15,6 +15,7 @@ enum NotchPage: Equatable {
     case account(Account)
     case stats
     case activity
+    case reports
 }
 
 /// Live agent sessions from hooks and herdr, and the alerts they raise.

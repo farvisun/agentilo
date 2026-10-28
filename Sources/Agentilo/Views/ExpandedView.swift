@@ -22,13 +22,16 @@ struct ExpandedView: View {
                 case .account(let acct):
                     AccountPage(
                         account: acct, status: state.status(acct), stats: state.stats,
-                        mode: state.settings.displayMode, now: state.now
+                        mode: state.settings.displayMode, now: state.now,
+                        suggestion: state.suggestion(from: acct), terminal: state.settings.preferredTerminal
                     )
                         .id(acct.id)
                 case .stats:
                     StatsPage(stats: state.stats)
                 case .activity:
                     ActivityPage(stats: state.stats)
+                case .reports:
+                    ReportsPage(stats: state.stats, openReports: state.openReports)
                 }
             }
             .padding(.horizontal, 18)
@@ -128,6 +131,8 @@ struct AccountPage: View {
     var stats: TokenStats
     var mode: UsageDisplay
     var now: Date
+    var suggestion: AccountSuggestion? = nil
+    var terminal: TerminalApp = .none
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -153,7 +158,11 @@ struct AccountPage: View {
                     .multilineTextAlignment(.center)
             }
             Spacer(minLength: 0)
-            footer
+            if let suggestion {
+                SwitchRow(suggestion: suggestion, terminal: terminal)
+            } else {
+                footer
+            }
         }
     }
 
@@ -232,6 +241,46 @@ struct AccountPage: View {
         if s < 3_600 { return "\(s / 60)m ago" }
         if s < 86_400 { return "\(s / 3_600)h ago" }
         return "\(s / 86_400)d ago"
+    }
+}
+
+/// "Switch to Work · 88% left": copies the command that starts the agent on that account.
+private struct SwitchRow: View {
+    var suggestion: AccountSuggestion
+    var terminal: TerminalApp
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.swap")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Palette.green)
+            Text("Switch to \(suggestion.to.label)")
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+            Text("\(Int((100 - suggestion.toUsed).rounded()))% left")
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundStyle(Palette.secondary)
+            Spacer()
+            if let command = suggestion.command {
+                Button(copied ? "Copied" : "Copy command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(command, forType: .string)
+                    copied = true
+                    Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
+                }
+                .help(command)
+                if terminal != .none {
+                    Button("Open in \(terminal.displayName)") { TerminalLauncher.open(command, in: terminal) }
+                        .help(command)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.07)))
     }
 }
 

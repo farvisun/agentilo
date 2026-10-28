@@ -33,6 +33,26 @@ public enum PillMode: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// Where "Open in terminal" starts a suggested account's agent.
+public enum TerminalApp: String, Codable, CaseIterable, Sendable, Identifiable {
+    /// Only copy the command.
+    case none
+    case ghostty
+    case iterm
+    case terminal
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .none: "Copy the command only"
+        case .ghostty: "Ghostty"
+        case .iterm: "iTerm2"
+        case .terminal: "Terminal"
+        }
+    }
+}
+
 /// Which limit window the collapsed pill shows for an account.
 public enum PillWindow: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Whichever window is closest to its limit.
@@ -115,6 +135,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var agentDoneSummary = true
     /// Show a working agent's progress (spinner, turn time) in the collapsed pill.
     public var pillShowsAgents = true
+    /// Point to a sibling account with room left when one runs low.
+    public var accountSuggestions = true
+    public var preferredTerminal = TerminalApp.none
+    /// Monday morning alert with last week's numbers.
+    public var weeklySummary = true
     /// Answer Claude Code permission prompts from the notch.
     public var approvalsEnabled = false
     /// Seconds a prompt waits in the notch before Claude Code asks in the terminal instead.
@@ -157,6 +182,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         agentDoneAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentDoneAlerts) ?? d.agentDoneAlerts
         agentDoneSummary = try c.decodeIfPresent(Bool.self, forKey: .agentDoneSummary) ?? d.agentDoneSummary
         pillShowsAgents = try c.decodeIfPresent(Bool.self, forKey: .pillShowsAgents) ?? d.pillShowsAgents
+        accountSuggestions = try c.decodeIfPresent(Bool.self, forKey: .accountSuggestions) ?? d.accountSuggestions
+        preferredTerminal = (try? c.decodeIfPresent(TerminalApp.self, forKey: .preferredTerminal)) ?? d.preferredTerminal
+        weeklySummary = try c.decodeIfPresent(Bool.self, forKey: .weeklySummary) ?? d.weeklySummary
         approvalsEnabled = try c.decodeIfPresent(Bool.self, forKey: .approvalsEnabled) ?? d.approvalsEnabled
         approvalTimeout = try c.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? d.approvalTimeout
         quietSchedule = try c.decodeIfPresent(QuietSchedule.self, forKey: .quietSchedule) ?? d.quietSchedule

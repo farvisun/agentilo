@@ -124,8 +124,12 @@ final class NotchWindowController {
         // Debug: `--preview-expanded` pins the expanded view open for screenshots.
         if CommandLine.arguments.contains("--preview-expanded") {
             setExpanded(true)
-            // `--preview-page last` opens on the last page.
-            if CommandLine.arguments.contains("last"), state.page != state.pageCount - 1 { state.page = state.pageCount - 1 }
+            // `--preview-page last|reports|switch` opens on that page.
+            let args = CommandLine.arguments
+            if let i = args.firstIndex(of: "--preview-page"), i + 1 < args.count,
+               let page = state.previewPage(args[i + 1]), state.page != page {
+                state.page = page
+            }
             return
         }
         let inside = isInside(NSEvent.mouseLocation, screen: screen)

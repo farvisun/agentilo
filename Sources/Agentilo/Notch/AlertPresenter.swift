@@ -19,6 +19,8 @@ struct NotchAlert: Identifiable, Equatable {
     var duration: TimeInterval = 4.5
     /// Still shown during quiet hours (approvals, limit reached) when the user allows it.
     var urgent = false
+    /// Opening the notch over it shows the Reports page.
+    var opensReports = false
 }
 
 /// Shows queued alerts one at a time. Alerts wait while the notch is expanded
@@ -29,6 +31,8 @@ final class AlertCenter {
     enum Hold { case expanded, fullscreen }
 
     private(set) var current: NotchAlert?
+    /// The alert the user opened the notch over, until the notch closes.
+    @ObservationIgnored private(set) var read: NotchAlert?
     @ObservationIgnored private var queue: [NotchAlert] = []
     @ObservationIgnored private var holds: Set<Hold> = []
     @ObservationIgnored private var dismissTask: Task<Void, Never>?
@@ -54,12 +58,14 @@ final class AlertCenter {
     func hold(_ reason: Hold, _ on: Bool) {
         if on {
             holds.insert(reason)
+            if reason == .expanded { read = current }
             guard let shown = current else { return }
             dismissTask?.cancel()
             current = nil
             // Expanding over an alert reads it; a full-screen app only postpones it.
             if reason == .fullscreen { queue.insert(shown, at: 0) }
         } else if holds.remove(reason) != nil {
+            if reason == .expanded { read = nil }
             pump()
         }
     }
@@ -82,6 +88,19 @@ final class AlertCenter {
 }
 
 extension NotchAlert {
+    init(weekly r: Report, streak: Int) {
+        var message = "≈ \(Formatters.money(r.total.cost)) · \(Formatters.compactTokens(r.total.tokens)) tokens"
+        if let change = Report.change(Double(r.total.tokens), Double(r.previous.tokens)) {
+            message += " · \(Formatters.change(change)) tokens"
+        }
+        var body = r.rows.first.map { "Top project \($0.name), \(Int(($0.share * 100).rounded()))% of tokens." } ?? ""
+        body += " Active \(r.activeDays) of 7 days\(streak > 1 ? ", \(streak)-day streak" : "")."
+        self.init(
+            symbol: "chart.bar.xaxis", title: "Last week", message: message,
+            body: body.trimmingCharacters(in: .whitespaces), color: Palette.green, duration: 8, opensReports: true
+        )
+    }
+
     init(_ alert: LimitAlert, sound: Bool, now: Date = Date()) {
         let color: Color
         let tone: String
