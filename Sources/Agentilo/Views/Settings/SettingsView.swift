@@ -276,6 +276,21 @@ struct AccountsTab: View {
                 Spacer()
                 Button("Refresh all") { state.refreshAll(force: true) }
             }
+
+            Divider().padding(.vertical, 2)
+            Toggle("Suggest another account when one runs low", isOn: $state.settings.accountSuggestions)
+            HStack {
+                Picker("Open suggested accounts in", selection: $state.settings.preferredTerminal) {
+                    ForEach(TerminalApp.allCases) { Text($0.displayName).tag($0) }
+                }
+                .fixedSize()
+                .disabled(!state.settings.accountSuggestions)
+                Spacer()
+            }
+            Text("At \(Int(AccountAdvisor.trigger))% of a window, the account page and the limit alert point to a home of the same agent with at least \(Int(AccountAdvisor.minGap)) points more room. iTerm2 and Terminal ask once for permission to be controlled.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

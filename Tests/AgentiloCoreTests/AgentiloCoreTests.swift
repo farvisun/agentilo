@@ -201,6 +201,13 @@ final class ProxyTests: XCTestCase {
         XCTAssertTrue(s.quietAllowUrgent)
         XCTAssertNil(s.snoozeUntil)
         XCTAssertFalse(s.quietManual)
+        XCTAssertTrue(s.agentDoneSummary)
+        XCTAssertTrue(s.pillShowsAgents)
+        XCTAssertTrue(s.accountSuggestions)
+        XCTAssertEqual(s.preferredTerminal, .none)
+        // A terminal this build does not know falls back instead of failing the whole file.
+        let odd = try JSONDecoder().decode(AppSettings.self, from: Data("{\"preferredTerminal\": \"warp\"}".utf8))
+        XCTAssertEqual(odd.preferredTerminal, .none)
     }
 }
 
@@ -778,5 +785,51 @@ final class ActivityStatsTests: XCTestCase {
         XCTAssertEqual(stats.history.last?.day, key(0))
         XCTAssertEqual(stats.currentStreak, 3)
         XCTAssertEqual(stats.longestStreak, 4)
+    }
+}
+
+final class AccountAdvisorTests: XCTestCase {
+    private func acct(_ label: String, _ provider: Provider = .claude, home: String) -> Account {
+        Account(provider: provider, homePath: home, label: label)
+    }
+
+    private func snap(_ used: Double...) -> UsageSnapshot {
+        UsageSnapshot(windows: used.enumerated().map {
+            UsageWindow(id: "w\($0.offset)", kind: .weekly, title: "W", usedPercent: $0.element, resetsAt: nil, windowLength: nil)
+        })
+    }
+
+    func testSuggestsTheEmptiestSibling() {
+        let main = acct("Main", home: "~/.claude"), work = acct("Work", home: "~/.claude_multi/work"),
+            side = acct("Side", home: "~/.claude_multi/side")
+        let s = AccountAdvisor.suggest(
+            accounts: [main, work, side],
+            snapshots: [main.id: snap(40, 88), work.id: snap(12), side.id: snap(30, 50)]
+        )
+        XCTAssertEqual(s.count, 1)
+        XCTAssertEqual(s.first?.from.label, "Main")
+        XCTAssertEqual(s.first?.to.label, "Work")
+        XCTAssertEqual(s.first?.reason, "Work has 88% left")
+        XCTAssertEqual(s.first?.command, "CLAUDE_CONFIG_DIR=~/.claude_multi/work claude")
+    }
+
+    func testNeedsPressureAndAGap() {
+        let a = acct("A", home: "~/.claude"), b = acct("B", home: "~/.claude_b")
+        // Not busy enough yet.
+        XCTAssertTrue(AccountAdvisor.suggest(accounts: [a, b], snapshots: [a.id: snap(80), b.id: snap(0)]).isEmpty)
+        // Busy, but the other one is nearly as full.
+        XCTAssertTrue(AccountAdvisor.suggest(accounts: [a, b], snapshots: [a.id: snap(95), b.id: snap(70)]).isEmpty)
+        // No sibling, or a sibling without numbers.
+        XCTAssertTrue(AccountAdvisor.suggest(accounts: [a], snapshots: [a.id: snap(99)]).isEmpty)
+        XCTAssertTrue(AccountAdvisor.suggest(accounts: [a, b], snapshots: [a.id: snap(99)]).isEmpty)
+    }
+
+    func testStaysWithinAProvider() {
+        let claude = acct("C", home: "~/.claude"), codex = acct("X", .codex, home: "~/.codex_work")
+        XCTAssertTrue(AccountAdvisor.suggest(accounts: [claude, codex], snapshots: [claude.id: snap(99), codex.id: snap(0)]).isEmpty)
+        XCTAssertEqual(AccountAdvisor.command(for: codex), "CODEX_HOME=~/.codex_work codex")
+        XCTAssertEqual(AccountAdvisor.command(for: acct("D", .codex, home: "~/.codex")), "codex")
+        XCTAssertNil(AccountAdvisor.command(for: acct("Cur", .cursor, home: "/tmp/cursor")))
+        XCTAssertEqual(AccountAdvisor.shellPath("/Volumes/My Disk/.claude"), "'/Volumes/My Disk/.claude'")
     }
 }

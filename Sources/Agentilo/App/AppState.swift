@@ -124,6 +124,14 @@ final class AppState {
 
     func status(_ account: Account) -> AccountStatus { statuses[account.id] ?? AccountStatus() }
 
+    /// A sibling with room to spare for this account, when it is running low.
+    func suggestion(from account: Account) -> AccountSuggestion? {
+        guard settings.accountSuggestions else { return nil }
+        return AccountAdvisor.suggest(
+            accounts: limitAccounts, snapshots: statuses.compactMapValues(\.snapshot), now: now
+        ).first { $0.from.id == account.id }
+    }
+
     /// What the collapsed pill shows, per the pill mode. One entry fills both wings; two split them.
     var pillItems: [(account: Account, window: UsageWindow)] {
         switch settings.pillMode {
@@ -259,7 +267,12 @@ final class AppState {
             fired: &firedAlerts, now: now
         )
         if firedAlerts != before { AlertStore.save(firedAlerts) }
-        for a in found { alerts.post(NotchAlert(a, sound: settings.alertSound, now: now)) }
+        let switchTo = suggestion(from: acct).map { "Switch: \($0.reason)" }
+        for a in found {
+            var alert = NotchAlert(a, sound: settings.alertSound, now: now)
+            if a.kind != .reset { alert.body = switchTo }
+            alerts.post(alert)
+        }
     }
 
     // MARK: Quiet hours

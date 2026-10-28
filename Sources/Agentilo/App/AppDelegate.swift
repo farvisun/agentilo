@@ -22,6 +22,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 state?.postTestAlert()
             }
         }
+        // Debug: `--preview-expanded` opens the notch on the first account with a switch suggestion.
+        if CommandLine.arguments.contains("--preview-expanded") {
+            Task { @MainActor [state] in
+                try? await Task.sleep(for: .seconds(6))
+                guard let state else { return }
+                let pages = state.pages
+                state.page = pages.firstIndex {
+                    if case .account(let a) = $0 { state.suggestion(from: a) != nil } else { false }
+                } ?? 0
+                state.expanded = true
+            }
+        }
     }
 
     /// Reopening the app from Finder or Spotlight shows Settings, since there is no Dock icon.
