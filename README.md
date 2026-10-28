@@ -5,7 +5,7 @@
 <h1 align="center">Agentilo</h1>
 
 <p align="center">
-  Claude Code, Codex and Cursor plan limits, paced, beside your MacBook notch.<br>
+  Claude Code, Codex, Gemini CLI and Cursor plan limits, paced, beside your MacBook notch.<br>
   <a href="https://farvisun.github.io/agentilo/"><strong>Website</strong></a> ·
   <a href="https://github.com/farvisun/agentilo/releases/latest"><strong>Download</strong></a>
 </p>
@@ -36,7 +36,7 @@ This also links the `agentilo` command. Or install by hand:
    ```
    or right-click the app → Open, or allow it in System Settings → Privacy & Security.
 
-Agentilo finds your agent homes (`~/.claude`, `~/.codex`, Cursor) on first launch. Hover the notch.
+Agentilo finds your agent homes (`~/.claude`, `~/.codex`, `~/.gemini`, Cursor) on first launch. Hover the notch.
 
 Or build it yourself: `git clone https://github.com/farvisun/agentilo && cd agentilo && make install`.
 
@@ -51,11 +51,11 @@ Agentilo checks for a new release once a day and asks before installing it (Sett
 - **Alerts**: drop down out of the notch at 75%, 90% and 100% of a window (with the projected run-out time) and when a window resets. Optional sound. Settings → Alerts.
 - **Quiet mode**: quiet hours on a schedule (wrapping past midnight, per weekday), snooze from the moon menu in the expanded notch, and `agentilo quiet on|off|45m|2h|status` for scripts. Approvals and limit-reached alerts still come through unless you turn that off. To follow a macOS Focus, add a Shortcuts automation (When Focus turns on → Run Shell Script `agentilo quiet on`, and `off` when it turns off).
 - **Local API + CLI**: `GET http://127.0.0.1:6737/v1/limits` (loopback only, refuses browser pages, no credentials) and `agentilo limits [--json|--short] [--force]` for scripts and status lines; falls back to cached numbers when the app is not running. Install the command in Settings → Agents.
-- **Agents**: live list of running agents (working, waiting for approval or input, done) with the current tool and task, from [herdr](https://herdr.dev) and/or Claude Code / Codex hooks. A pulsing dot on the pill and a drop-down alert when an agent needs you or finishes a longer turn, showing the start of its last reply, the turn time and the tool count (the reply text stays on your Mac and is not in the API); click a row to jump to its herdr pane in Ghostty. Install hooks per home in Settings → Agents (commands marked `# agentilo`, other hooks untouched, original kept as `*.agentilo-bak`).
+- **Agents**: live list of running agents (working, waiting for approval or input, done) with the current tool and task, from [herdr](https://herdr.dev) and/or Claude Code / Codex / Gemini CLI hooks. A pulsing dot on the pill and a drop-down alert when an agent needs you or finishes a longer turn, showing the start of its last reply, the turn time and the tool count (the reply text stays on your Mac and is not in the API); click a row to jump to its herdr pane in Ghostty. Install hooks per home in Settings → Agents (commands marked `# agentilo`, other hooks untouched, original kept as `*.agentilo-bak`).
 - **Approvals** (opt-in): Claude Code permission prompts appear in the notch with Allow / Deny / Always and the full command. Unanswered prompts go back to the terminal after a timeout (default 60s), as does any prompt for a herdr pane you are looking at. Settings → Agents → Approvals, then update the Claude hooks.
 - **Activity**: a 26-week heatmap and streak, today's prompts, tool calls, sessions and top projects, and a cost estimate at Anthropic and OpenAI API list prices (plans are not billed per token; models without a known price are counted separately). Daily totals, split by project, model and agent, are kept in `daily-history.json`, so the heatmap and reports outlive the agents' own 30-day log cleanup.
 - **Reports**: the last notch page compares the last 7 days with the 7 before and lists top projects and models. Every Monday from 09:00 an alert sums up last week. The Reports window charts daily cost or tokens by project, model or agent over 7 days to 26 weeks, with a sortable table and the change against the period before.
-- **Accounts**: every agent home is its own account (`~/.claude`, `~/.claude_multi/*`, `~/.codex*`, Cursor). Auto-detected on first launch; edit in Settings → Accounts. When one account reaches 85% of a window and a home of the same agent has at least 30 points more room, the account page and the limit alert suggest switching, with the command (`CLAUDE_CONFIG_DIR=… claude`, `CODEX_HOME=… codex`) to copy or open in Ghostty, iTerm2 or Terminal.
+- **Accounts**: every agent home is its own account (`~/.claude`, `~/.claude_multi/*`, `~/.codex*`, `~/.gemini`, Cursor). Auto-detected on first launch; edit in Settings → Accounts. When one account reaches 85% of a window and a home of the same agent has at least 30 points more room, the account page and the limit alert suggest switching, with the command (`CLAUDE_CONFIG_DIR=… claude`, `CODEX_HOME=… codex`) to copy or open in Ghostty, iTerm2 or Terminal.
 - **Proxy**: global System / None / HTTP / HTTPS / SOCKS5 with optional auth (password in Keychain), plus per-provider override and a connection test.
 
 ## Build from source
@@ -76,8 +76,9 @@ make dump       # print every account's limits and token stats in the terminal
 | Claude | Keychain `Claude Code-credentials[-<sha256(home)[:8]>]` or `<home>/.credentials.json` | `GET api.anthropic.com/api/oauth/usage` |
 | Codex | `<home>/auth.json` | `GET chatgpt.com/backend-api/wham/usage` |
 | Cursor | `state.vscdb` → `cursorAuth/accessToken` | `GET cursor.com/api/usage-summary` |
+| Gemini CLI | `<home>/oauth_creds.json` | `POST cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` and `:retrieveUserQuota` |
 
-Tokens are never refreshed or rewritten and are only sent to their own provider. These endpoints are undocumented and may change.
+Tokens are never refreshed or rewritten and are only sent to their own provider. These endpoints are undocumented and may change. Gemini's Google token lasts about an hour and only the CLI refreshes it, so between Gemini sessions the notch shows the last numbers with "Run `gemini` to refresh it".
 
 ### When the API is unavailable
 
@@ -87,12 +88,12 @@ If a provider rate limits the app, is unreachable, or the sign-in expired, the n
 - **Claude**: Claude Code stores no limit percentages on disk. Each successful fetch records "% per cost-weighted token" for each window from the local logs; offline, the last response is advanced by tokens logged since, shown as "≈ estimated". Usage from other machines or claude.ai is not seen locally.
 - Windows past their reset roll over to 0%. `make dump ARGS=--offline` prints the fallback without calling any server.
 
-Token statistics come from `<home>/projects/**/*.jsonl` (Claude) and `<home>/sessions/**/*.jsonl` (Codex), deduplicated across files by message id, cached incrementally in `~/Library/Application Support/Agentilo/`.
+Token statistics come from `<home>/projects/**/*.jsonl` (Claude), `<home>/sessions/**/*.jsonl` (Codex) and `<home>/tmp/*/chats/**/*.jsonl` (Gemini CLI), deduplicated across files by message id, cached incrementally in `~/Library/Application Support/Agentilo/`.
 
 ## Privacy
 
 - Credentials are read, never refreshed or rewritten, and only sent to the provider they belong to.
-- No analytics, no telemetry, no account. The only network calls are the three usage endpoints above (through your proxy, if set) and the daily update check against this repository's releases.
+- No analytics, no telemetry, no account. The only network calls are the usage endpoints above (through your proxy, if set) and the daily update check against this repository's releases.
 - The local API binds to `127.0.0.1` only. See [SECURITY.md](SECURITY.md) to report a problem.
 
 ## License
