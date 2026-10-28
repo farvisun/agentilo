@@ -46,6 +46,8 @@ public struct Report: Sendable, Equatable {
     /// The same number of days just before `start`.
     public var previous: DayUsage
     public var activeDays: Int
+    /// False when part of the previous period predates breakdowns, so per-row changes are unknown.
+    public var previousBrokenDown: Bool
     /// Largest first by tokens.
     public var rows: [ReportRow]
     /// Per day and group, oldest first; groups beyond the top few are summed into "Other".
@@ -62,10 +64,11 @@ public enum ReportBuilder {
     public static let unattributed = "Earlier, not broken down"
     public static let other = "Other"
 
-    /// The `days` days ending with `end`'s day.
+    /// The `days` days ending with `end`'s day. Rows (and the chart's top groups) are largest first
+    /// by tokens, or by cost with `rankByCost`.
     public static func report(
         history: [DayRecord], days: Int, end: Date = Date(), groupBy: ReportGroup,
-        seriesGroups: Int = 5, calendar: Calendar = .current
+        rankByCost: Bool = false, seriesGroups: Int = 5, calendar: Calendar = .current
     ) -> Report {
         let endDay = calendar.startOfDay(for: end)
         let start = calendar.date(byAdding: .day, value: -(days - 1), to: endDay)!
@@ -107,7 +110,9 @@ public enum ReportBuilder {
             ReportRow(name: name, usage: u, previous: prev[name] ?? DayUsage(),
                       share: sum.tokens > 0 ? Double(u.tokens) / Double(sum.tokens) : 0)
         }
-        .sorted { ($0.tokens, $1.name) > ($1.tokens, $0.name) }
+        .sorted {
+            rankByCost && $0.cost != $1.cost ? $0.cost > $1.cost : ($0.tokens, $1.name) > ($1.tokens, $0.name)
+        }
 
         let top = Set(rows.prefix(seriesGroups).map(\.name))
         var series: [ReportPoint] = []
@@ -125,6 +130,7 @@ public enum ReportBuilder {
             start: start, end: endDay, days: days, total: sum,
             previous: before.map(total).reduce(DayUsage(), +),
             activeDays: period.filter { $0.1?.active == true }.count,
+            previousBrokenDown: prev[unattributed] == nil,
             rows: rows, series: series
         )
     }

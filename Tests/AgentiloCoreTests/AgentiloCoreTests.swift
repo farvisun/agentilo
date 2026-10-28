@@ -231,6 +231,18 @@ final class ReportTests: XCTestCase {
 
         let longer = ReportBuilder.report(history: history, days: 14, end: end, groupBy: .project, calendar: cal)
         XCTAssertEqual(longer.rows.first { $0.name == ReportBuilder.unattributed }?.tokens, 40)
+        // Day 12 has totals only, so this week's per-project changes are unknown...
+        XCTAssertFalse(r.previousBrokenDown)
+        // ...while a week later the week before is fully broken down.
+        let next = ReportBuilder.report(history: history, days: 7, end: cal.date(byAdding: .day, value: 7, to: end)!,
+                                        groupBy: .project, calendar: cal)
+        XCTAssertTrue(next.previousBrokenDown)
+
+        // By cost, a cheap-token, pricey project ranks first.
+        var pricey = day(1, ["cheap": 1_000])
+        pricey.projects?["pricey"] = DayUsage(tokens: 10, cost: 50)
+        let byCost = ReportBuilder.report(history: [pricey], days: 7, end: end, groupBy: .project, rankByCost: true, calendar: cal)
+        XCTAssertEqual(byCost.rows.first?.name, "pricey")
     }
 
     func testLastWeekStartsOnMonday() throws {
@@ -283,6 +295,7 @@ final class ProxyTests: XCTestCase {
         XCTAssertTrue(s.pillShowsAgents)
         XCTAssertTrue(s.accountSuggestions)
         XCTAssertEqual(s.preferredTerminal, .none)
+        XCTAssertTrue(s.weeklySummary)
         // A terminal this build does not know falls back instead of failing the whole file.
         let odd = try JSONDecoder().decode(AppSettings.self, from: Data("{\"preferredTerminal\": \"warp\"}".utf8))
         XCTAssertEqual(odd.preferredTerminal, .none)

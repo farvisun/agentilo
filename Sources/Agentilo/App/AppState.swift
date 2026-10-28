@@ -41,6 +41,8 @@ final class AppState {
 
     var statuses: [UUID: AccountStatus] = [:]
     var stats = TokenStats()
+    /// Opens the Reports window; set by the app delegate.
+    @ObservationIgnored var openReports: () -> Void = {}
     var layout = NotchLayout()
     var expanded = false
     var page = 0
@@ -101,7 +103,7 @@ final class AppState {
     /// Pages of the expanded notch, in order.
     var pages: [NotchPage] {
         (agents.sessions.isEmpty ? [] : [.agents]) + limitAccounts.map { .account($0) }
-            + (settings.showTokenStats ? [.stats, .activity] : [])
+            + (settings.showTokenStats ? [.stats, .activity, .reports] : [])
     }
 
     var pageCount: Int { pages.count }
@@ -123,6 +125,17 @@ final class AppState {
     }
 
     func status(_ account: Account) -> AccountStatus { statuses[account.id] ?? AccountStatus() }
+
+    /// Debug: the page index for `--preview-page`.
+    func previewPage(_ name: String) -> Int? {
+        switch name {
+        case "last": return pageCount - 1
+        case "reports": return pages.firstIndex(of: .reports)
+        case "switch":
+            return pages.firstIndex { if case .account(let a) = $0 { suggestion(from: a) != nil } else { false } }
+        default: return Int(name)
+        }
+    }
 
     /// A sibling with room to spare for this account, when it is running low.
     func suggestion(from account: Account) -> AccountSuggestion? {
@@ -190,8 +203,13 @@ final class AppState {
     /// Called when the notch opens: fetch anything older than a minute.
     func expandedRefresh() {
         now = Date()
-        // Open on the agents when one is waiting.
-        if agents.attentionCount > 0 { page = 0 }
+        // Open on the agents when one is waiting, on the reports over the weekly summary.
+        if agents.attentionCount > 0 {
+            page = 0
+        } else if alerts.read?.opensReports == true,
+                  let i = pages.firstIndex(of: .reports) {
+            page = i
+        }
         for acct in limitAccounts where Date().timeIntervalSince(lastFetch[acct.id] ?? .distantPast) > 60 {
             refresh(acct, force: false)
         }
@@ -275,6 +293,23 @@ final class AppState {
         }
     }
 
+    /// From Monday 09:00, once per week: last week's cost, tokens and top project.
+    /// Quiet hours postpone it rather than drop it.
+    func checkWeeklySummary() {
+        guard settings.weeklySummary, quietReason == nil, stats.computedAt != .distantPast else { return }
+        let now = Date(), cal = Calendar.current
+        let lastWeek = ReportBuilder.lastWeekStart(now: now)
+        let thisWeek = cal.date(byAdding: .day, value: 7, to: lastWeek)!
+        let key = "weekly|\(DayKey.int(lastWeek))"
+        guard now >= thisWeek.addingTimeInterval(9 * 3_600), firedAlerts[key] == nil else { return }
+        firedAlerts[key] = now
+        AlertStore.save(firedAlerts)
+        let sunday = cal.date(byAdding: .day, value: -1, to: thisWeek)!
+        let report = ReportBuilder.report(history: stats.history, days: 7, end: sunday, groupBy: .project)
+        guard report.total.tokens > 0 else { return }
+        alerts.post(NotchAlert(weekly: report, streak: stats.currentStreak))
+    }
+
     // MARK: Quiet hours
 
     /// Why alerts are silent right now, if they are.
@@ -332,6 +367,7 @@ final class AppState {
             let refreshed = updates
             await MainActor.run {
                 self.stats = s
+                self.checkWeeklySummary()
                 for (id, snap) in refreshed where self.statuses[id]?.snapshot?.source != .live {
                     let old = self.statuses[id]?.snapshot
                     self.statuses[id]?.snapshot = snap

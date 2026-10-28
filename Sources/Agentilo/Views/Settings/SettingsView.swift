@@ -122,6 +122,7 @@ struct AlertsTab: View {
                     Toggle(t == 100 ? "100% (limit reached)" : "\(t)%", isOn: threshold(t))
                 }
                 Toggle("Tell me when a window resets", isOn: $state.settings.resetAlerts)
+                Toggle("Sum up last week on Monday morning", isOn: $state.settings.weeklySummary)
             }
             .disabled(!state.settings.alertsEnabled)
             Toggle("Play a sound", isOn: $state.settings.alertSound)

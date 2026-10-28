@@ -128,6 +128,17 @@ public struct UsageSnapshot: Codable, Hashable, Sendable {
 }
 
 public enum Formatters {
+    /// "$4.20", or "$120" from $100 up.
+    public static func money(_ v: Double) -> String {
+        v >= 100 ? String(format: "$%.0f", v) : String(format: "$%.2f", v)
+    }
+
+    /// "+25%", "−8%", "±0%".
+    public static func change(_ c: Double) -> String {
+        let p = Int((c * 100).rounded())
+        return p == 0 ? "±0%" : p > 0 ? "+\(p)%" : "−\(-p)%"
+    }
+
     public static func compactTokens(_ n: Int) -> String {
         let v = Double(n)
         switch abs(v) {

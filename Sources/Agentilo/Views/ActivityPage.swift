@@ -79,9 +79,7 @@ struct ActivityPage: View {
         }
     }
 
-    private func money(_ v: Double) -> String {
-        v >= 100 ? String(format: "$%.0f", v) : String(format: "$%.2f", v)
-    }
+    private func money(_ v: Double) -> String { Formatters.money(v) }
 }
 
 /// One cell per day, a column per week, today in the bottom-right corner.

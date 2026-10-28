@@ -138,6 +138,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Point to a sibling account with room left when one runs low.
     public var accountSuggestions = true
     public var preferredTerminal = TerminalApp.none
+    /// Monday morning alert with last week's numbers.
+    public var weeklySummary = true
     /// Answer Claude Code permission prompts from the notch.
     public var approvalsEnabled = false
     /// Seconds a prompt waits in the notch before Claude Code asks in the terminal instead.
@@ -182,6 +184,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         pillShowsAgents = try c.decodeIfPresent(Bool.self, forKey: .pillShowsAgents) ?? d.pillShowsAgents
         accountSuggestions = try c.decodeIfPresent(Bool.self, forKey: .accountSuggestions) ?? d.accountSuggestions
         preferredTerminal = (try? c.decodeIfPresent(TerminalApp.self, forKey: .preferredTerminal)) ?? d.preferredTerminal
+        weeklySummary = try c.decodeIfPresent(Bool.self, forKey: .weeklySummary) ?? d.weeklySummary
         approvalsEnabled = try c.decodeIfPresent(Bool.self, forKey: .approvalsEnabled) ?? d.approvalsEnabled
         approvalTimeout = try c.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? d.approvalTimeout
         quietSchedule = try c.decodeIfPresent(QuietSchedule.self, forKey: .quietSchedule) ?? d.quietSchedule

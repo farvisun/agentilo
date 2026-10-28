@@ -30,6 +30,8 @@ struct ExpandedView: View {
                     StatsPage(stats: state.stats)
                 case .activity:
                     ActivityPage(stats: state.stats)
+                case .reports:
+                    ReportsPage(stats: state.stats, openReports: state.openReports)
                 }
             }
             .padding(.horizontal, 18)
