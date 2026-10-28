@@ -106,14 +106,38 @@ extension AppState {
                     color: Palette.amber, sound: settings.alertSound ? "Ping" : nil, duration: 6,
                     urgent: t.to == .waitingPermission
                 ))
-            } else if t.to == .done, t.from == .working, t.after >= Self.doneAlertMinimum, settings.agentDoneAlerts {
-                alerts.post(NotchAlert(
-                    provider: s.provider, symbol: "checkmark.circle.fill", title: "\(name) finished",
-                    message: "\(what) · after \(Formatters.duration(t.after))",
-                    color: Palette.green, sound: settings.alertSound ? "Hero" : nil
-                ))
+            } else if t.to == .done, t.from == .working, settings.agentDoneAlerts || settings.agentDoneSummary {
+                let turn = s.turnStartedAt.map { t.session.stateSince.timeIntervalSince($0) } ?? t.after
+                let alert = settings.agentDoneAlerts && turn >= Self.doneAlertMinimum
+                Task { await self.finished(s, name: name, what: what, turn: turn, alert: alert) }
             }
         }
+    }
+
+    /// Reads the reply (from the hook, else the transcript), keeps it on the session, then alerts.
+    private func finished(_ s: AgentSession, name: String, what: String, turn: TimeInterval, alert: Bool) async {
+        var reply = s.lastReply
+        if reply == nil, settings.agentDoneSummary, let file = transcript(for: s) {
+            reply = await Task.detached(priority: .utility) {
+                TranscriptTail.lastReply(file: file).flatMap { ReplyExcerpt.make($0) }
+            }.value
+            if let reply { agents.setReply(s.id, reply) }
+        }
+        guard alert else { return }
+        alerts.post(NotchAlert(
+            provider: s.provider, symbol: "checkmark.circle.fill", title: "\(name) finished",
+            message: "\(what) · after \(Formatters.duration(turn))\(s.toolCalls > 0 ? " · \(s.toolCalls) tools" : "")",
+            body: settings.agentDoneSummary ? reply : nil,
+            color: Palette.green, sound: settings.alertSound ? "Hero" : nil,
+            duration: settings.agentDoneSummary && reply != nil ? 7 : 4.5
+        ))
+    }
+
+    private func transcript(for s: AgentSession) -> URL? {
+        if let path = s.transcriptPath { return URL(fileURLWithPath: path) }
+        guard let sid = s.sessionID, let provider = s.provider else { return nil }
+        let homes = settings.accounts.filter { $0.enabled && $0.provider == provider }.map(\.homeURL)
+        return TranscriptTail.locate(sessionID: sid, provider: provider, homes: homes)
     }
 
     /// The user is already looking at this agent: its herdr pane is focused in the frontmost terminal.

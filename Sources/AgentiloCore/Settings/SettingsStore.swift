@@ -111,6 +111,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var agentAttentionAlerts = true
     /// Alert when an agent finishes a turn that took a while.
     public var agentDoneAlerts = true
+    /// Put the first lines of the agent's last reply in the "finished" alert.
+    public var agentDoneSummary = true
+    /// Show a working agent's progress (spinner, turn time) in the collapsed pill.
+    public var pillShowsAgents = true
     /// Answer Claude Code permission prompts from the notch.
     public var approvalsEnabled = false
     /// Seconds a prompt waits in the notch before Claude Code asks in the terminal instead.
@@ -151,6 +155,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         herdrEnabled = try c.decodeIfPresent(Bool.self, forKey: .herdrEnabled) ?? d.herdrEnabled
         agentAttentionAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentAttentionAlerts) ?? d.agentAttentionAlerts
         agentDoneAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentDoneAlerts) ?? d.agentDoneAlerts
+        agentDoneSummary = try c.decodeIfPresent(Bool.self, forKey: .agentDoneSummary) ?? d.agentDoneSummary
+        pillShowsAgents = try c.decodeIfPresent(Bool.self, forKey: .pillShowsAgents) ?? d.pillShowsAgents
         approvalsEnabled = try c.decodeIfPresent(Bool.self, forKey: .approvalsEnabled) ?? d.approvalsEnabled
         approvalTimeout = try c.decodeIfPresent(Int.self, forKey: .approvalTimeout) ?? d.approvalTimeout
         quietSchedule = try c.decodeIfPresent(QuietSchedule.self, forKey: .quietSchedule) ?? d.quietSchedule

@@ -67,13 +67,13 @@ private struct AgentRow: View {
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 10))
-                        .foregroundStyle(Palette.tertiary)
+                        .foregroundStyle(session.state == .done && session.lastReply != nil ? Palette.secondary : Palette.tertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
                 Spacer(minLength: 8)
                 StateChip(state: session.state)
-                Text(Formatters.duration(now.timeIntervalSince(session.stateSince)))
+                Text(Formatters.duration(now.timeIntervalSince(session.state == .working ? (session.turnStartedAt ?? session.stateSince) : session.stateSince)))
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(Palette.tertiary)
                     .frame(width: 44, alignment: .trailing)
@@ -88,7 +88,10 @@ private struct AgentRow: View {
     }
 
     private var subtitle: String {
+        // A finished turn shows what the agent said; a running one what it is doing.
+        if session.state == .done, let reply = session.lastReply { return reply }
         var parts = [session.project]
+        if session.state == .working, session.toolCalls > 0 { parts.append("\(session.toolCalls) tools") }
         if let tool = session.tool, session.state == .working || session.state == .waitingPermission { parts.append(tool) }
         if let detail = session.detail, session.state != .idle { parts.append(detail) }
         return parts.joined(separator: " · ")

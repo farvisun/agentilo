@@ -54,7 +54,8 @@ final class AppState {
 
     var notchMode: NotchMode {
         if !approvals.isEmpty { return .approval }
-        return expanded ? .expanded : (alerts.current != nil ? .alert : .collapsed)
+        if expanded { return .expanded }
+        return alerts.current.map { .alert(tall: $0.body != nil) } ?? .collapsed
     }
 
     @ObservationIgnored private let statsEngine = StatsEngine()

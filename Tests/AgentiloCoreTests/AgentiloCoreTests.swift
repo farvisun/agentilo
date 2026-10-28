@@ -536,6 +536,66 @@ final class AgentSessionTests: XCTestCase {
     }
 }
 
+final class TurnSummaryTests: XCTestCase {
+    func testClaudeTranscriptGivesTheLastMessageText() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "claude_reply", withExtension: "jsonl", subdirectory: "Fixtures"))
+        let reply = try XCTUnwrap(TranscriptTail.lastReply(file: url))
+        XCTAssertTrue(reply.hasPrefix("## Fixed"))
+        XCTAssertTrue(reply.hasSuffix("Run `make test` to confirm."))
+        XCTAssertEqual(
+            ReplyExcerpt.make(reply),
+            "Fixed The build passes now. I removed the stale build/ cache in Makefile. Run make test to confirm."
+        )
+    }
+
+    func testCodexTranscriptPrefersTaskComplete() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "codex_reply", withExtension: "jsonl", subdirectory: "Fixtures"))
+        XCTAssertEqual(TranscriptTail.lastReply(file: url), "Done: added the /health route and a test.")
+    }
+
+    func testExcerptDropsCodeAndCaps() {
+        let text = "Here is the fix:\n```swift\nlet x = 1\n```\n- first\n- second\n" + String(repeating: "word ", count: 200)
+        let e = ReplyExcerpt.make(text, limit: 60)!
+        XCTAssertTrue(e.hasPrefix("Here is the fix: first second word"))
+        XCTAssertFalse(e.contains("let x"))
+        XCTAssertEqual(e.count, 60)
+        XCTAssertNil(ReplyExcerpt.make("```\ncode only\n```"))
+    }
+
+    func testStopHookCarriesReplyAndTurnCounters() {
+        var store = AgentSessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        store.apply(AgentEvent(agent: "claude", kind: .prompt, sessionID: "s", at: t0))
+        store.apply(AgentEvent(agent: "claude", kind: .preTool, sessionID: "s", tool: "Bash", at: t0 + 5))
+        store.apply(AgentEvent(agent: "claude", kind: .preTool, sessionID: "s", tool: "Edit", at: t0 + 9))
+        store.apply(AgentEvent(agent: "claude", kind: .permission, sessionID: "s", at: t0 + 10))
+        store.apply(AgentEvent(agent: "claude", kind: .postTool, sessionID: "s", at: t0 + 20))
+        var s = store.sessions["claude:s"]!
+        XCTAssertEqual(s.turnStartedAt, t0, "a permission wait keeps the turn")
+        XCTAssertEqual(s.toolCalls, 2)
+        store.apply(AgentEvent(agent: "claude", kind: .stop, sessionID: "s", lastMessage: "**Done.** All green.", at: t0 + 30))
+        s = store.sessions["claude:s"]!
+        XCTAssertEqual(s.lastReply, "Done. All green.")
+        store.apply(AgentEvent(agent: "claude", kind: .prompt, sessionID: "s", at: t0 + 60))
+        s = store.sessions["claude:s"]!
+        XCTAssertEqual(s.turnStartedAt, t0 + 60)
+        XCTAssertEqual(s.toolCalls, 0)
+        XCTAssertNil(s.lastReply)
+    }
+
+    func testHookInputReadsReplyFieldsOfEitherAgent() {
+        let claude = AgentEvent.from(
+            hookInput: ["session_id": "a", "last_assistant_message": "All set.", "transcript_path": "/t/a.jsonl"],
+            agent: "claude", kind: .stop, environment: [:]
+        )
+        XCTAssertEqual(claude.lastMessage, "All set.")
+        XCTAssertEqual(claude.transcriptPath, "/t/a.jsonl")
+        let codex = AgentEvent.from(hookInput: ["last-assistant-message": "Done."], agent: "codex", kind: .stop, environment: [:])
+        XCTAssertEqual(codex.lastMessage, "Done.")
+        XCTAssertNil(AgentEvent.from(hookInput: ["last_assistant_message": ""], agent: "claude", kind: .stop, environment: [:]).lastMessage)
+    }
+}
+
 final class HookInstallerTests: XCTestCase {
     let exe = "/Applications/Agentilo.app/Contents/MacOS/Agentilo"
 

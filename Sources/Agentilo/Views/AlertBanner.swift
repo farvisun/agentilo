@@ -1,7 +1,8 @@
 import AgentiloCore
 import SwiftUI
 
-/// The part of an alert below the notch: icon, title, one line of detail.
+/// The part of an alert below the notch: icon, title, one line of detail, and optionally
+/// two lines of body (an agent's last reply).
 struct AlertBanner: View {
     var alert: NotchAlert
 
@@ -27,11 +28,20 @@ struct AlertBanner: View {
                     .foregroundStyle(Palette.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                if let body = alert.body {
+                    Text(body)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
             }
             Spacer(minLength: 0)
             Circle().fill(alert.color).frame(width: 7, height: 7)
         }
         .padding(.horizontal, 22)
-        .frame(height: NotchGeometry.alertHeight)
+        .frame(height: alert.body == nil ? NotchGeometry.alertHeight : NotchGeometry.tallAlertHeight)
     }
 }
