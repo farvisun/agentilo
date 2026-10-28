@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Agentilo · Plan limits in the notch</title>
+  <meta name="description" content="Agentilo is a free, open-source macOS notch app that shows Claude Code, Codex and Cursor plan limits, paces them against the clock, and lets you watch and approve your agents.">
+  <meta name="theme-color" content="#050507">
+  <link rel="canonical" href="https://farvisun.github.io/agentilo/">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Agentilo · Plan limits in the notch">
+  <meta property="og:description" content="Claude Code, Codex and Cursor limits, paced against the clock, beside your MacBook notch. Free and open source.">
+  <meta property="og:url" content="https://farvisun.github.io/agentilo/">
+  <meta property="og:image" content="https://farvisun.github.io/agentilo/assets/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Agentilo","operatingSystem":"macOS 14 or later","applicationCategory":"DeveloperApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"license":"https://opensource.org/licenses/MIT","url":"https://farvisun.github.io/agentilo/","downloadUrl":"https://github.com/farvisun/agentilo/releases/latest"}
+  </script>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="logo-claude" viewBox="0 0 24 24"><path fill="#D97757" d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"/></symbol>
+      <linearGradient id="codex-g" gradientUnits="userSpaceOnUse" x1="12" x2="12" y1="3" y2="21"><stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/></linearGradient>
+      <symbol id="logo-codex" viewBox="0 0 24 24"><path fill="#fff" d="M19.503 0H4.496A4.496 4.496 0 000 4.496v15.007A4.496 4.496 0 004.496 24h15.007A4.496 4.496 0 0024 19.503V4.496A4.496 4.496 0 0019.503 0z"/><path fill="url(#codex-g)" d="M9.064 3.344a4.578 4.578 0 012.285-.312c1 .115 1.891.54 2.673 1.275.01.01.024.017.037.021a.09.09 0 00.043 0 4.55 4.55 0 013.046.275l.047.022.116.057a4.581 4.581 0 012.188 2.399c.209.51.313 1.041.315 1.595a4.24 4.24 0 01-.134 1.223.123.123 0 00.03.115c.594.607.988 1.33 1.183 2.17.289 1.425-.007 2.71-.887 3.854l-.136.166a4.548 4.548 0 01-2.201 1.388.123.123 0 00-.081.076c-.191.551-.383 1.023-.74 1.494-.9 1.187-2.222 1.846-3.711 1.838-1.187-.006-2.239-.44-3.157-1.302a.107.107 0 00-.105-.024c-.388.125-.78.143-1.204.138a4.441 4.441 0 01-1.945-.466 4.544 4.544 0 01-1.61-1.335c-.152-.202-.303-.392-.414-.617a5.81 5.81 0 01-.37-.961 4.582 4.582 0 01-.014-2.298.124.124 0 00.006-.056.085.085 0 00-.027-.048 4.467 4.467 0 01-1.034-1.651 3.896 3.896 0 01-.251-1.192 5.189 5.189 0 01.141-1.6c.337-1.112.982-1.985 1.933-2.618.212-.141.413-.251.601-.33.215-.089.43-.164.646-.227a.098.098 0 00.065-.066 4.51 4.51 0 01.829-1.615 4.535 4.535 0 011.837-1.388zm3.482 10.565a.637.637 0 000 1.272h3.636a.637.637 0 100-1.272h-3.636zM8.462 9.23a.637.637 0 00-1.106.631l1.272 2.224-1.266 2.136a.636.636 0 101.095.649l1.454-2.455a.636.636 0 00.005-.64L8.462 9.23z"/></symbol>
+      <symbol id="logo-cursor" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M22.106 5.68L12.5.135a.998.998 0 00-.998 0L1.893 5.68a.84.84 0 00-.419.726v11.186c0 .3.16.577.42.727l9.607 5.547a.999.999 0 00.998 0l9.608-5.547a.84.84 0 00.42-.727V6.407a.84.84 0 00-.42-.726zm-.603 1.176L12.228 22.92c-.063.108-.228.064-.228-.061V12.34a.59.59 0 00-.295-.51l-9.11-5.26c-.107-.062-.063-.228.062-.228h18.55c.264 0 .428.286.296.514z"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 007.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.56-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 015.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0023.5 12C23.5 5.65 18.35.5 12 .5z"/></symbol>
+      <symbol id="i-apple" viewBox="0 0 24 24"><path fill="currentColor" d="M16.37 1.43c0 1.14-.42 2.2-1.25 3.03-.9.9-1.98 1.42-3.15 1.33-.02-.11-.03-.23-.03-.36 0-1.09.48-2.25 1.3-3.08.41-.42.93-.77 1.56-1.05.63-.27 1.22-.42 1.77-.45.01.2.02.39.02.58h-.22zm4.4 16.2c-.37.86-.81 1.65-1.33 2.37-.7.99-1.27 1.67-1.71 2.05-.69.62-1.43.94-2.21.96-.56 0-1.24-.16-2.03-.48-.8-.32-1.53-.48-2.2-.48-.7 0-1.46.16-2.27.48-.81.32-1.47.49-1.97.51-.75.03-1.5-.3-2.25-.99-.48-.41-1.08-1.12-1.8-2.13-.77-1.07-1.4-2.31-1.9-3.73C.57 14.65.3 13.16.3 11.71c0-1.66.36-3.09 1.08-4.29a6.3 6.3 0 012.26-2.29 6.07 6.07 0 013.06-.86c.6 0 1.39.19 2.37.55.97.37 1.6.55 1.87.55.21 0 .91-.21 2.09-.64 1.12-.4 2.07-.56 2.84-.5 2.1.17 3.67.99 4.72 2.48-1.88 1.14-2.81 2.73-2.79 4.77.02 1.59.59 2.91 1.72 3.96.51.48 1.08.86 1.71 1.12-.14.39-.28.77-.44 1.13z"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="grain" aria-hidden="true"></div>
+  <div class="aura" aria-hidden="true"></div>
+
+  <!-- The notch. Fixed to the top of the window, it acts out each chapter of the tour. -->
+  <div class="notch-stage" aria-hidden="true">
+    <div class="notch" id="notch" data-scene="idle">
+      <div class="notch-pill">
+        <span class="wing wing-left"><span class="ring" style="--p:.64;--c:var(--amber)"></span></span>
+        <span class="notch-gap"></span>
+        <span class="wing wing-right"><span class="pill-pct">64%</span><span class="pill-dot"></span></span>
+      </div>
+      <div class="notch-body">
+        <!-- Scene: limits -->
+        <section class="scene" data-for="limits idle hover">
+          <header class="acct">
+            <svg class="logo"><use href="#logo-claude"/></svg>
+            <div><b>Claude</b><small>~/.claude</small></div>
+            <span class="plan">Max 20x</span>
+            <span class="spacer"></span>
+            <small class="dim">just now</small>
+          </header>
+          <div class="win" data-used="38" data-elapsed=".47" data-reset="5h">
+            <div class="win-head"><span>Session</span><b class="pct">38%</b><span class="spacer"></span><em class="pace">On track</em><small class="dim tick" data-reset-in="9480">resets 4:10 PM · 2h 38m</small></div>
+            <div class="meter"><i style="--f:.38"></i><u style="--x:.47"></u></div>
+          </div>
+          <div class="win" data-used="64" data-elapsed=".55">
+            <div class="win-head"><span>Weekly</span><b class="pct amber">64%</b><span class="spacer"></span><em class="pace amber">Ahead of pace</em><small class="dim">resets Thu 2:00 PM · 3d 4h</small></div>
+            <div class="meter amber"><i style="--f:.64"></i><u style="--x:.55"></u></div>
+          </div>
+          <footer class="live"><span class="dot green"></span><b>web-app</b><small class="dim">42m · 1.8M tokens</small><span class="spacer"></span><small class="faint">Today 6.2M tokens</small></footer>
+          <nav class="pager"><i class="on"></i><i></i><i></i><i></i></nav>
+        </section>
+
+        <!-- Scene: pace -->
+        <section class="scene" data-for="pace">
+          <header class="acct">
+            <svg class="logo"><use href="#logo-codex"/></svg>
+            <div><b>Codex</b><small>~/.codex</small></div>
+            <span class="plan">Pro</span>
+            <span class="spacer"></span>
+            <small class="amber">from Codex logs · 2m ago</small>
+          </header>
+          <div class="win">
+            <div class="win-head"><span>5 hours</span><b class="pct">22%</b><span class="spacer"></span><em class="pace">On track</em><small class="dim">resets 5:40 PM · 3h 50m</small></div>
+            <div class="meter"><i style="--f:.22"></i><u style="--x:.23"></u></div>
+          </div>
+          <div class="win">
+            <div class="win-head"><span>Weekly</span><b class="pct red">81%</b><span class="spacer"></span><em class="pace red">Runs out Thu 7:24 PM</em></div>
+            <div class="meter red"><i style="--f:.81"></i><u style="--x:.57"></u></div>
+          </div>
+          <footer class="live"><span class="dot green"></span><b>api-server</b><small class="dim">1h 06m · 3.4M tokens</small><span class="spacer"></span><small class="faint">Today 9.1M tokens</small></footer>
+          <nav class="pager"><i></i><i class="on"></i><i></i><i></i></nav>
+        </section>
+
+        <!-- Scene: agents -->
+        <section class="scene" data-for="agents">
+          <header class="row-head"><span class="sym">›_</span><b>Agents</b><span class="spacer"></span><small class="amber">1 waiting</small><small class="green">2 working</small><small class="faint">4 total</small></header>
+          <ul class="agents">
+            <li class="waiting"><svg class="logo"><use href="#logo-claude"/></svg><div><b>web-app</b><small>Waiting for approval · Bash</small></div><span class="spacer"></span><span class="state amber"><span class="dot amber pulse"></span>needs you</span></li>
+            <li><svg class="logo"><use href="#logo-codex"/></svg><div><b>api-server</b><small>Edit · AppState.swift</small></div><span class="spacer"></span><span class="state green"><span class="dot green"></span>working</span></li>
+            <li><svg class="logo"><use href="#logo-claude"/></svg><div><b>ui-polish</b><small>Read · NotchShape.swift</small></div><span class="spacer"></span><span class="state green"><span class="dot green"></span>working</span></li>
+            <li class="done"><svg class="logo"><use href="#logo-claude"/></svg><div><b>docs</b><small>Finished · 12m turn</small></div><span class="spacer"></span><span class="state faint">✓ done</span></li>
+          </ul>
+        </section>
+
+        <!-- Scene: approval -->
+        <section class="scene" data-for="approval">
+          <header class="row-head"><span class="sym amber">✋</span><b>Claude wants to use Bash</b><span class="spacer"></span><small class="faint">web-app · 1 of 1</small></header>
+          <pre class="cmd"><span class="faint">$</span> rm -rf build &amp;&amp; make test</pre>
+          <div class="approve">
+            <button tabindex="-1" class="btn-deny">Deny</button>
+            <button tabindex="-1" class="btn-always">Always allow</button>
+            <button tabindex="-1" class="btn-allow">Allow</button>
+            <span class="spacer"></span>
+            <small class="faint countdown">48s</small>
+          </div>
+          <div class="timeout"><i></i></div>
+        </section>
+
+        <!-- Scene: activity -->
+        <section class="scene" data-for="activity">
+          <div class="activity">
+            <div class="streak"><small class="dim">Streak</small><b>23</b><small class="faint">longest 41</small></div>
+            <div class="heat-wrap">
+              <div class="heat-head"><small class="dim">Last 26 weeks</small><span class="spacer"></span><small class="faint">7 days ≈ $284</small></div>
+              <div class="heat" id="heat"></div>
+            </div>
+            <div class="today">
+              <small class="dim">Today</small><b>≈ $41.20</b>
+              <dl><dt>Prompts</dt><dd>148</dd><dt>Tool calls</dt><dd>1,206</dd><dt>Sessions</dt><dd>9</dd></dl>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- An alert drops out of the notch in the alerts chapter. -->
+    <div class="alert" id="alert">
+      <span class="alert-ring" style="--p:.9;--c:var(--red)"></span>
+      <div><b>Codex weekly at 90%</b><small>Runs out Thu 7:24 PM · resets Fri 2:00 PM</small></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Agentilo, back to top">
+      <picture><source srcset="assets/icon-512.webp" type="image/webp"><img src="assets/favicon.png" width="28" height="28" alt=""></picture>
+      <span>Agentilo</span>
+    </a>
+    <nav class="topnav" aria-label="Primary">
+      <a href="#tour">Tour</a>
+      <a href="#pace">Pace</a>
+      <a href="#cli">CLI</a>
+      <a href="#install">Install</a>
+      <a class="gh" href="https://github.com/farvisun/agentilo" aria-label="Agentilo on GitHub"><svg><use href="#i-github"/></svg><span class="stars" id="stars">GitHub</span></a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero" data-scene="idle">
+      <p class="kicker reveal"><span class="kdot"></span>Free and open source · macOS 14+</p>
+      <h1 class="headline">
+        <span class="line"><span class="word">Know</span> <span class="word">your</span> <span class="word">limits.</span></span>
+        <span class="line serif"><span class="word">Right</span> <span class="word">under</span> <span class="word">the</span> <span class="word">notch.</span></span>
+      </h1>
+      <p class="lede reveal">Agentilo turns the black bar on your MacBook into a quiet dashboard for <span class="chip"><svg><use href="#logo-claude"/></svg>Claude&nbsp;Code</span>, <span class="chip"><svg><use href="#logo-codex"/></svg>Codex</span> and <span class="chip"><svg class="cursor-logo"><use href="#logo-cursor"/></svg>Cursor</span>. It paces every plan window against the clock, so you know <em>before</em> you hit the wall.</p>
+      <div class="cta reveal">
+        <a class="btn btn-primary magnetic" href="https://github.com/farvisun/agentilo/releases/latest"><svg><use href="#i-apple"/></svg>Download for Mac</a>
+        <a class="btn btn-ghost magnetic" href="https://github.com/farvisun/agentilo"><svg><use href="#i-github"/></svg>Star on GitHub</a>
+      </div>
+      <p class="hint reveal"><span class="arrow">↑</span> Hover the notch. It’s live.</p>
+      <div class="wordmark" aria-hidden="true"><span>agentilo</span></div>
+    </section>
+
+    <!-- Marquee -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>Session limits</span><i>◐</i><span>Weekly limits</span><i>◐</i><span>Pace, not panic</span><i>◐</i><span>Run-out forecasts</span><i>◐</i><span>Live agents</span><i>◐</i><span>Approvals</span><i>◐</i><span>26-week heatmap</span><i>◐</i><span>Local API</span><i>◐</i>
+        <span>Session limits</span><i>◐</i><span>Weekly limits</span><i>◐</i><span>Pace, not panic</span><i>◐</i><span>Run-out forecasts</span><i>◐</i><span>Live agents</span><i>◐</i><span>Approvals</span><i>◐</i><span>26-week heatmap</span><i>◐</i><span>Local API</span><i>◐</i>
+      </div>
+    </div>
+
+    <!-- Tour: the notch at the top acts out each chapter -->
+    <section class="tour" id="tour" aria-label="Tour">
+      <ol class="rail" aria-hidden="true">
+        <li data-ch="limits">01</li><li data-ch="pace">02</li><li data-ch="alert">03</li><li data-ch="agents">04</li><li data-ch="approval">05</li><li data-ch="activity">06</li>
+      </ol>
+
+      <article class="chapter" data-scene="limits">
+        <p class="ch-num">01 · Limits</p>
+        <h2>Every plan window, <span class="serif">one glance up.</span></h2>
+        <p>Collapsed, the notch shows a ring and a number for the account closest to trouble. Hover and it opens into session and weekly meters, reset times and the session you are in right now. Scroll to page through accounts.</p>
+        <ul class="facts"><li>Every agent home is its own account: <code>~/.claude</code>, <code>~/.claude_multi/*</code>, <code>~/.codex*</code>, Cursor</li><li>Found automatically on first launch</li></ul>
+      </article>
+
+      <article class="chapter" data-scene="pace">
+        <p class="ch-num">02 · Pace</p>
+        <h2>Not just <em>how much.</em> <span class="serif">How fast.</span></h2>
+        <p>81% used sounds bad on a Thursday and fine on a Sunday. The white tick on each meter is where you would be at an even pace. Run ahead of it and the color moves from green to amber to red, with a forecast of when you run out.</p>
+        <ul class="facts"><li><span class="tag green">On track</span> within 5 points of the clock</li><li><span class="tag amber">Ahead of pace</span> up to 12 points over</li><li><span class="tag red">Runs out 7:24 PM</span> when the trend beats the reset</li></ul>
+      </article>
+
+      <article class="chapter" data-scene="alert">
+        <p class="ch-num">03 · Alerts</p>
+        <h2>It taps you on the shoulder. <span class="serif">Then gets out of the way.</span></h2>
+        <p>At 75%, 90% and 100% of a window, an alert drops out of the notch with the projected run-out time. Another one says when a window resets. No dock icon, no menu bar clutter, optional sound. Full-screen apps keep the notch hidden.</p>
+      </article>
+
+      <article class="chapter" data-scene="agents">
+        <p class="ch-num">04 · Agents</p>
+        <h2>All your agents, <span class="serif">one pulse.</span></h2>
+        <p>Running Claude Code and Codex sessions, what each is doing, and which one is waiting for you. A dot on the pill pulses when an agent needs input or finishes a long turn. Click a row to jump to its pane.</p>
+        <ul class="facts"><li>Reads <a href="https://herdr.dev">herdr</a> and/or Claude Code and Codex hooks</li><li>Hooks are marked and reversible; your other hooks stay untouched</li></ul>
+      </article>
+
+      <article class="chapter" data-scene="approval">
+        <p class="ch-num">05 · Approvals</p>
+        <h2>Say yes <span class="serif">without switching windows.</span></h2>
+        <p>Opt in and Claude Code permission prompts show up in the notch with the full command and Allow, Deny or Always. Leave one unanswered and it goes back to the terminal after a timeout, as does any prompt for the pane you are already looking at.</p>
+      </article>
+
+      <article class="chapter" data-scene="activity">
+        <p class="ch-num">06 · Activity</p>
+        <h2>Half a year of work, <span class="serif">in one glance.</span></h2>
+        <p>A 26-week heatmap and streak, today's prompts, tool calls and sessions, top projects, and what it all would cost at API list prices. Daily totals are kept on disk, so history outlives the agents' own 30-day log cleanup.</p>
+      </article>
+    </section>
+
+    <!-- Pace playground -->
+    <section class="try" id="pace" data-scene="hover">
+      <div class="section-head">
+        <p class="eyebrow">Try it</p>
+        <h2>The pace, <span class="serif">worked out live.</span></h2>
+        <p>The same rule the app uses. Drag the sliders.</p>
+      </div>
+      <div class="playground">
+        <div class="pg-card">
+          <div class="pg-top">
+            <span class="pg-title">Session · 5 hours</span>
+            <b class="pg-pct" id="pgPct">58%</b>
+            <span class="spacer"></span>
+            <em class="pg-pace" id="pgPace">On track</em>
+          </div>
+          <div class="pg-meter" id="pgMeter"><i></i><u></u></div>
+          <div class="pg-legend"><span>0%</span><span class="pg-tick-label" id="pgTickLabel">even pace</span><span>100%</span></div>
+          <p class="pg-note" id="pgNote">At this rate you reach the reset with room to spare.</p>
+        </div>
+        <div class="pg-controls">
+          <label><span>Used</span><output id="usedOut">58%</output><input id="used" type="range" min="0" max="100" value="58"></label>
+          <label><span>Window elapsed</span><output id="elapsedOut">2h 00m of 5h</output><input id="elapsed" type="range" min="1" max="299" value="120"></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLI -->
+    <section class="cli" id="cli" data-scene="hover">
+      <div class="section-head">
+        <p class="eyebrow">For scripts</p>
+        <h2>Pipe it <span class="serif">anywhere.</span></h2>
+        <p>A loopback-only API and a tiny CLI, so your status line, tmux bar or shell prompt can read the same numbers. Falls back to cached values when the app is closed.</p>
+      </div>
+      <div class="terminal">
+        <div class="term-bar"><i></i><i></i><i></i><span>zsh — ~/Projects</span></div>
+        <pre class="term" id="term"><code></code></pre>
+      </div>
+    </section>
+
+    <!-- Privacy -->
+    <section class="privacy" data-scene="hover">
+      <div class="section-head">
+        <p class="eyebrow">Private by design</p>
+        <h2>Your tokens <span class="serif">stay home.</span></h2>
+      </div>
+      <div class="cards">
+        <article class="card reveal"><span class="card-num">01</span><h3>Read-only credentials</h3><p>Uses the sign-ins Claude Code, Codex and Cursor already store. Never refreshes or rewrites them, and sends each only to its own provider.</p></article>
+        <article class="card reveal"><span class="card-num">02</span><h3>No telemetry</h3><p>No account, no analytics. The only requests are the three usage endpoints, through your proxy if you set one.</p></article>
+        <article class="card reveal"><span class="card-num">03</span><h3>Loopback only</h3><p>The local API listens on 127.0.0.1, refuses browser pages, and needs a per-install token for anything that changes state.</p></article>
+        <article class="card reveal"><span class="card-num">04</span><h3>Works offline</h3><p>Offline or rate limited? Codex limits come from its own logs; Claude limits are estimated from tokens logged since the last check.</p></article>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="install" id="install" data-scene="idle">
+      <div class="install-icon reveal">
+        <picture><source srcset="assets/icon-512.webp" type="image/webp"><img src="assets/icon-512.png" width="256" height="256" alt="Agentilo app icon: a glowing pace ring hanging from a notch" loading="lazy"></picture>
+      </div>
+      <h2 class="reveal">Hang it <span class="serif">from your notch.</span></h2>
+      <p class="reveal">Free and MIT licensed. macOS 14 Sonoma or later, on Apple silicon and Intel.</p>
+      <div class="cta reveal">
+        <a class="btn btn-primary magnetic" href="https://github.com/farvisun/agentilo/releases/latest"><svg><use href="#i-apple"/></svg>Download Agentilo</a>
+        <a class="btn btn-ghost magnetic" href="https://github.com/farvisun/agentilo#build-from-source"><svg><use href="#i-github"/></svg>Build from source</a>
+      </div>
+      <ol class="steps reveal">
+        <li><b>Unzip</b> and drag Agentilo.app to Applications.</li>
+        <li><b>First launch:</b> it isn't notarized yet, so clear the quarantine flag once.
+          <button class="copy" data-copy="xattr -dr com.apple.quarantine /Applications/Agentilo.app"><code>xattr -dr com.apple.quarantine /Applications/Agentilo.app</code><span class="copy-label">Copy</span></button>
+        </li>
+        <li><b>Hover the notch.</b> Your agent homes are already there.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-mark" aria-hidden="true">agentilo</div>
+    <div class="footer-row">
+      <p>MIT licensed. Not affiliated with Anthropic, OpenAI or Anysphere. Logos are trademarks of their owners.</p>
+      <nav aria-label="Footer">
+        <a href="https://github.com/farvisun/agentilo">GitHub</a>
+        <a href="https://github.com/farvisun/agentilo/releases">Releases</a>
+        <a href="https://github.com/farvisun/agentilo/issues">Issues</a>
+        <a href="https://github.com/farvisun/agentilo/blob/main/SECURITY.md">Security</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>
