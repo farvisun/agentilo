@@ -9,14 +9,14 @@ cask "agentilo" do
 
   # Sparkle updates the app in place.
   auto_updates true
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Agentilo.app"
   binary "#{appdir}/Agentilo.app/Contents/MacOS/Agentilo", target: "agentilo"
 
   # Ad-hoc signed, not notarized: without this macOS refuses the first launch.
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{appdir}/Agentilo.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Agentilo.app"]
   end
 
   uninstall quit: "app.agentilo.notch"
