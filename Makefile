@@ -1,4 +1,4 @@
-APP_NAME := AgentLimits
+APP_NAME := Agentilo
 BUNDLE   := build/$(APP_NAME).app
 CONFIG   ?= release
 ICON     := build/AppIcon.icns
@@ -38,7 +38,8 @@ dump: build
 
 install: app
 	-pkill -x $(APP_NAME)
-	rm -rf "/Applications/$(APP_NAME).app"
+	-pkill -x AgentLimits
+	rm -rf "/Applications/$(APP_NAME).app" "/Applications/AgentLimits.app"
 	cp -R "$(BUNDLE)" /Applications/
 	open "/Applications/$(APP_NAME).app"
 

@@ -2,23 +2,23 @@
 import PackageDescription
 
 let package = Package(
-    name: "AgentLimits",
+    name: "Agentilo",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "AgentLimits", targets: ["AgentLimits"]),
+        .executable(name: "Agentilo", targets: ["Agentilo"]),
     ],
     targets: [
         .target(
-            name: "AgentLimitsCore",
+            name: "AgentiloCore",
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .executableTarget(
-            name: "AgentLimits",
-            dependencies: ["AgentLimitsCore"]
+            name: "Agentilo",
+            dependencies: ["AgentiloCore"]
         ),
         .testTarget(
-            name: "AgentLimitsCoreTests",
-            dependencies: ["AgentLimitsCore"],
+            name: "AgentiloCoreTests",
+            dependencies: ["AgentiloCore"],
             resources: [.copy("Fixtures")]
         ),
     ],
