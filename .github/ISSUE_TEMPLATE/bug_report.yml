@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in the notch is wrong or missing
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      multiple: true
+      options: [Claude Code, Codex, Cursor, Not provider specific]
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Agentilo version, macOS version, Mac model
+      placeholder: "0.1.0, macOS 15.4, MacBook Pro M3"
+  - type: textarea
+    id: dump
+    attributes:
+      label: Output of `make dump` or `agentilo limits --json`
+      description: Remove account labels or paths you do not want to share. Never paste tokens.
+      render: text

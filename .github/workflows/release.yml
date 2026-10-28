@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the newest Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+      - name: Set the bundle version from the tag
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          plutil -replace CFBundleShortVersionString -string "$v" Resources/Info.plist
+          plutil -replace CFBundleVersion -string "$GITHUB_RUN_NUMBER" Resources/Info.plist
+      - run: make test
+      - name: Build a universal, ad-hoc signed app
+        run: make zip SWIFT_FLAGS="--arch arm64 --arch x86_64"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/Agentilo.zip \
+            --title "Agentilo $GITHUB_REF_NAME" --generate-notes \
+            --notes "The app is ad-hoc signed, not notarized. After moving it to /Applications, run \`xattr -dr com.apple.quarantine /Applications/Agentilo.app\` once, or right-click → Open."
