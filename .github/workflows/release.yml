@@ -7,25 +7,69 @@ on:
 permissions:
   contents: write
 
+env:
+  SPARKLE_VERSION: "2.10.1"
+
 jobs:
   release:
     runs-on: macos-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha256: ${{ steps.zip.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v5
       - name: Use the newest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
       - name: Set the bundle version from the tag
+        id: version
         run: |
           v="${GITHUB_REF_NAME#v}"
           plutil -replace CFBundleShortVersionString -string "$v" Resources/Info.plist
           plutil -replace CFBundleVersion -string "$GITHUB_RUN_NUMBER" Resources/Info.plist
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - run: make test
       - name: Build a universal, ad-hoc signed app
-        run: make zip SWIFT_FLAGS="--arch arm64 --arch x86_64"
+        id: zip
+        run: |
+          make zip SWIFT_FLAGS="--arch arm64 --arch x86_64"
+          echo "sha256=$(shasum -a 256 build/Agentilo.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Sign the update and write the appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" | tar -xJ -C "$RUNNER_TEMP" ./bin/sign_update
+          sig="$(echo "$SPARKLE_ED_PRIVATE_KEY" | "$RUNNER_TEMP/bin/sign_update" --ed-key-file - build/Agentilo.zip)"
+          scripts/appcast.sh "${{ steps.version.outputs.version }}" "$GITHUB_RUN_NUMBER" build/Agentilo.zip "$sig" > build/appcast.xml
+          cat build/appcast.xml
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/Agentilo.zip \
+          gh release create "$GITHUB_REF_NAME" build/Agentilo.zip build/appcast.xml \
             --title "Agentilo $GITHUB_REF_NAME" --generate-notes \
-            --notes "The app is ad-hoc signed, not notarized. After moving it to /Applications, run \`xattr -dr com.apple.quarantine /Applications/Agentilo.app\` once, or right-click → Open."
+            --notes "Install with \`brew install --cask farvisun/tap/agentilo\`, or download Agentilo.zip below. Existing installs update themselves.
+
+          Downloading by hand: the app is ad-hoc signed, not notarized. After moving it to /Applications, run \`xattr -dr com.apple.quarantine /Applications/Agentilo.app\` once, or right-click → Open."
+
+  cask:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Update the cask in farvisun/homebrew-tap
+        env:
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh && echo "$TAP_DEPLOY_KEY" > ~/.ssh/tap && chmod 600 ~/.ssh/tap
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/tap -o StrictHostKeyChecking=accept-new"
+          git clone git@github.com:farvisun/homebrew-tap.git tap
+          mkdir -p tap/Casks
+          sed -e "s/@VERSION@/${{ needs.release.outputs.version }}/" -e "s/@SHA256@/${{ needs.release.outputs.sha256 }}/" \
+            packaging/agentilo.rb > tap/Casks/agentilo.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/agentilo.rb
+          git diff --cached --quiet && exit 0
+          git commit -m "agentilo ${{ needs.release.outputs.version }}"
+          git push

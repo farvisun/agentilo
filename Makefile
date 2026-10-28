@@ -4,6 +4,8 @@ CONFIG   ?= release
 # e.g. SWIFT_FLAGS="--arch arm64 --arch x86_64" for a universal binary
 SWIFT_FLAGS ?=
 ICON     := build/AppIcon.icns
+SPARKLE  := "$(BUNDLE)/Contents/Frameworks/Sparkle.framework/Versions/B"
+SIGN     := codesign --force --sign - --timestamp=none
 
 .PHONY: all build app run test clean install dump zip
 
@@ -28,7 +30,14 @@ app: build $(ICON)
 	cp "$$(swift build -c $(CONFIG) $(SWIFT_FLAGS) --show-bin-path)/$(APP_NAME)" "$(BUNDLE)/Contents/MacOS/$(APP_NAME)"
 	cp Resources/Info.plist "$(BUNDLE)/Contents/Info.plist"
 	cp $(ICON) "$(BUNDLE)/Contents/Resources/AppIcon.icns"
-	codesign --force --sign - --timestamp=none "$(BUNDLE)"
+	mkdir -p "$(BUNDLE)/Contents/Frameworks"
+	ditto "$$(swift build -c $(CONFIG) $(SWIFT_FLAGS) --show-bin-path)/Sparkle.framework" "$(BUNDLE)/Contents/Frameworks/Sparkle.framework"
+	# Sign inside out (no --deep): Sparkle's helpers, the framework, then the app.
+	$(SIGN) $(SPARKLE)/XPCServices/Installer.xpc
+	$(SIGN) --preserve-metadata=entitlements $(SPARKLE)/XPCServices/Downloader.xpc
+	$(SIGN) $(SPARKLE)/Autoupdate $(SPARKLE)/Updater.app
+	$(SIGN) "$(BUNDLE)/Contents/Frameworks/Sparkle.framework"
+	$(SIGN) "$(BUNDLE)"
 	@echo "Built $(BUNDLE)"
 
 run: app

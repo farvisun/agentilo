@@ -4,10 +4,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var state: AppState
+    var updater: Updater
 
     var body: some View {
         TabView {
-            GeneralTab(state: state)
+            GeneralTab(state: state, updater: updater)
                 .tabItem { Label("General", systemImage: "gearshape") }
             AccountsTab(state: state)
                 .tabItem { Label("Accounts", systemImage: "person.2") }
@@ -25,6 +26,7 @@ struct SettingsView: View {
 
 struct GeneralTab: View {
     @Bindable var state: AppState
+    @Bindable var updater: Updater
     @State private var loginError: String?
 
     private let intervals: [(String, Double)] = [
@@ -70,6 +72,24 @@ struct GeneralTab: View {
             ))
             if let loginError {
                 Text(loginError).font(.caption).foregroundStyle(.red)
+            }
+            Section("Updates") {
+                LabeledContent("Version", value: Updater.version)
+                if Updater.isAvailable {
+                    Toggle("Check for updates daily", isOn: $updater.automaticallyChecks)
+                    HStack {
+                        Button("Check Now") { updater.checkNow() }
+                            .disabled(!updater.canCheck)
+                        Spacer()
+                        if let last = updater.lastCheck {
+                            Text("Last checked \(last.formatted(.relative(presentation: .named)))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    Text("Updates are available when running the app bundle (make run).")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section {
                 Text("Usage comes straight from each provider's server using the sign-in the agent already saved on this Mac. Tokens are read-only and only sent to their own provider.\n\nWhen a server is unreachable or rate limited: Codex limits are read from its own session logs (exact as of the last Codex turn); Claude limits are estimated from the last server response plus tokens logged since, marked ≈.")

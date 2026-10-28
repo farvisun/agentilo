@@ -456,7 +456,13 @@ input[type="range"]:active::-webkit-slider-thumb { box-shadow: 0 0 0 10px rgba(2
 @keyframes float { 50% { transform: translateY(-10px) rotate(-1.5deg); } }
 .install h2 { font-size: clamp(44px, 7vw, 104px); }
 .install > p { color: var(--ink-2); font-size: 18px; margin: 22px 0 0; max-width: 540px; }
-.steps { text-align: left; max-width: 640px; width: 100%; margin: 64px auto 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; }
+.brew { max-width: 640px; width: 100%; margin: 64px auto 0; text-align: left; }
+.brew-label { font: 500 12px/1 var(--mono); color: var(--amber); text-transform: uppercase; letter-spacing: .06em; }
+.brew .copy { margin-top: 14px; padding: 16px 18px; }
+.brew .copy code { font-size: 15px; }
+.brew p { margin: 12px 0 0; color: var(--ink-3); font-size: 14px; }
+.or { margin: 40px 0 0; font: 500 12px/1 var(--mono); color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.steps { text-align: left; max-width: 640px; width: 100%; margin: 20px auto 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; }
 .steps li { counter-increment: s; position: relative; padding: 20px 0 20px 52px; border-top: 1px solid var(--line); color: var(--ink-2); }
 .steps li:last-child { border-bottom: 1px solid var(--line); }
 .steps li::before { content: counter(s, decimal-leading-zero); position: absolute; left: 0; top: 22px; font: 500 12px/1 var(--mono); color: var(--amber); }

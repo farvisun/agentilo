@@ -275,7 +275,7 @@
       </div>
       <div class="cards">
         <article class="card reveal"><span class="card-num">01</span><h3>Read-only credentials</h3><p>Uses the sign-ins Claude Code, Codex and Cursor already store. Never refreshes or rewrites them, and sends each only to its own provider.</p></article>
-        <article class="card reveal"><span class="card-num">02</span><h3>No telemetry</h3><p>No account, no analytics. The only requests are the three usage endpoints, through your proxy if you set one.</p></article>
+        <article class="card reveal"><span class="card-num">02</span><h3>No telemetry</h3><p>No account, no analytics. The only requests are the three usage endpoints, through your proxy if you set one, and a daily update check.</p></article>
         <article class="card reveal"><span class="card-num">03</span><h3>Loopback only</h3><p>The local API listens on 127.0.0.1, refuses browser pages, and needs a per-install token for anything that changes state.</p></article>
         <article class="card reveal"><span class="card-num">04</span><h3>Works offline</h3><p>Offline or rate limited? Codex limits come from its own logs; Claude limits are estimated from tokens logged since the last check.</p></article>
       </div>
@@ -292,6 +292,12 @@
         <a class="btn btn-primary magnetic" href="https://github.com/farvisun/agentilo/releases/latest"><svg><use href="#i-apple"/></svg>Download Agentilo</a>
         <a class="btn btn-ghost magnetic" href="https://github.com/farvisun/agentilo#build-from-source"><svg><use href="#i-github"/></svg>Build from source</a>
       </div>
+      <div class="brew reveal">
+        <span class="brew-label">Homebrew</span>
+        <button class="copy" data-copy="brew install --cask farvisun/tap/agentilo"><code>brew install --cask farvisun/tap/agentilo</code><span class="copy-label">Copy</span></button>
+        <p>Then hover the notch. It updates itself from here on.</p>
+      </div>
+      <p class="or reveal">or by hand</p>
       <ol class="steps reveal">
         <li><b>Unzip</b> and drag Agentilo.app to Applications.</li>
         <li><b>First launch:</b> it isn't notarized yet, so clear the quarantine flag once.

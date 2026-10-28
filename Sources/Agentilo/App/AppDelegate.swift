@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var state: AppState!
     private var notch: NotchWindowController!
     private var settingsWindow: NSWindow?
+    private let updater = Updater()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         state = AppState()
@@ -31,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func openSettings() {
         if settingsWindow == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(state: state)))
+            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(state: state, updater: updater)))
             w.title = "Agentilo Settings"
             w.styleMask = [.titled, .closable, .miniaturizable]
             w.isReleasedWhenClosed = false

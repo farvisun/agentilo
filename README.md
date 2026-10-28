@@ -21,15 +21,28 @@ Agentilo is a free, open-source notch app for macOS 14+. It shows how much of ea
 
 ## Install
 
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask farvisun/tap/agentilo
+```
+
+This also links the `agentilo` command. Or install by hand:
+
 1. Download `Agentilo.zip` from the [latest release](https://github.com/farvisun/agentilo/releases/latest), unzip it and move `Agentilo.app` to `/Applications`.
 2. The app is ad-hoc signed, not notarized, so macOS blocks the first launch. Clear the quarantine flag once:
    ```sh
    xattr -dr com.apple.quarantine /Applications/Agentilo.app
    ```
    or right-click the app → Open, or allow it in System Settings → Privacy & Security.
-3. Agentilo finds your agent homes (`~/.claude`, `~/.codex`, Cursor) on first launch. Hover the notch.
+
+Agentilo finds your agent homes (`~/.claude`, `~/.codex`, Cursor) on first launch. Hover the notch.
 
 Or build it yourself: `git clone https://github.com/farvisun/agentilo && cd agentilo && make install`.
+
+### Updates
+
+Agentilo checks for a new release once a day and asks before installing it (Settings → General → Updates). Updates are verified with an EdDSA signature ([Sparkle](https://sparkle-project.org)) and replace the app in place, so hooks and the `agentilo` command keep working. Because the app is ad-hoc signed, macOS may ask once after an update before it reads a proxy password Agentilo stored in the Keychain.
 
 ## Features
 
@@ -77,7 +90,7 @@ Token statistics come from `<home>/projects/**/*.jsonl` (Claude) and `<home>/ses
 ## Privacy
 
 - Credentials are read, never refreshed or rewritten, and only sent to the provider they belong to.
-- No analytics, no telemetry, no account. The only network calls are the three usage endpoints above (through your proxy, if set).
+- No analytics, no telemetry, no account. The only network calls are the three usage endpoints above (through your proxy, if set) and the daily update check against this repository's releases.
 - The local API binds to `127.0.0.1` only. See [SECURITY.md](SECURITY.md) to report a problem.
 
 ## License

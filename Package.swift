@@ -7,6 +7,9 @@ let package = Package(
     products: [
         .executable(name: "Agentilo", targets: ["Agentilo"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+    ],
     targets: [
         .target(
             name: "AgentiloCore",
@@ -14,7 +17,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "Agentilo",
-            dependencies: ["AgentiloCore"]
+            dependencies: ["AgentiloCore", .product(name: "Sparkle", package: "Sparkle")],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .testTarget(
             name: "AgentiloCoreTests",
