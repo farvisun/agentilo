@@ -28,6 +28,7 @@ extension Provider {
         case .claude: Color(red: 0.85, green: 0.47, blue: 0.34)
         case .codex: Color(red: 0.55, green: 0.65, blue: 1.00)
         case .cursor: Color(red: 0.75, green: 0.75, blue: 0.80)
+        case .gemini: Color(red: 0.19, green: 0.53, blue: 1.00)
         }
     }
 }

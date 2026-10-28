@@ -1,0 +1,11 @@
+{"sessionId":"5f0c2a9e-1111-4c5e-9d21-aaaaaaaaaaaa","projectHash":"abc","startTime":"2026-10-20T10:00:00.000Z","lastUpdated":"2026-10-20T10:00:00.000Z","kind":"main"}
+{"id":"u1","timestamp":"2026-10-20T10:00:01.000Z","type":"user","content":[{"text":"Add a /health route"}]}
+{"$set":{"lastUpdated":"2026-10-20T10:00:01.000Z"}}
+{"id":"g1","timestamp":"2026-10-20T10:00:05.000Z","type":"gemini","content":"","thoughts":[],"tokens":null,"model":"gemini-3.1-pro"}
+{"id":"g1","timestamp":"2026-10-20T10:00:05.000Z","type":"gemini","content":"","thoughts":[],"tokens":{"input":1000,"output":50,"cached":600,"thoughts":20,"tool":0,"total":1070},"model":"gemini-3.1-pro"}
+{"id":"g1","timestamp":"2026-10-20T10:00:05.000Z","type":"gemini","content":"","thoughts":[],"tokens":{"input":1000,"output":50,"cached":600,"thoughts":20,"tool":0,"total":1070},"model":"gemini-3.1-pro","toolCalls":[{"id":"call-1","name":"write_file","args":{"file_path":"server.ts"},"status":"success","timestamp":"2026-10-20T10:00:06.000Z"}]}
+{"id":"u2","timestamp":"2026-10-20T10:00:07.000Z","type":"user","content":[{"functionResponse":{"id":"call-1","name":"write_file","response":{"output":"ok"}}}]}
+{"id":"g2","timestamp":"2026-10-20T10:00:09.000Z","type":"gemini","content":"## Done\n\nAdded the **/health** route and a test.","thoughts":[],"tokens":{"input":1200,"output":30,"cached":1000,"thoughts":0,"tool":0,"total":1230},"model":"gemini-3.1-pro"}
+{"$patch":{"updates":[{"id":"g2","content":"## Done\n\nAdded the **/health** route and a test."}]}}
+{"$rewindTo":"g2"}
+{"$set":{"lastUpdated":"2026-10-20T10:00:09.000Z"}}

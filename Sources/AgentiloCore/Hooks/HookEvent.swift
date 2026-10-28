@@ -25,6 +25,18 @@ public enum AgentEventKind: String, Codable, Sendable, CaseIterable {
         case .sessionEnd: "SessionEnd"
         }
     }
+
+    /// Gemini CLI names its events differently and has no permission hook.
+    public func hookName(for provider: Provider) -> String {
+        guard provider == .gemini else { return hookName }
+        return switch self {
+        case .prompt: "BeforeAgent"
+        case .preTool: "BeforeTool"
+        case .postTool: "AfterTool"
+        case .stop: "AfterAgent"
+        default: hookName
+        }
+    }
 }
 
 /// One hook call, as posted by `agentilo hook <agent> <event>` to `/v1/events`.
@@ -81,9 +93,10 @@ public struct AgentEvent: Codable, Equatable, Sendable {
             detail: detail,
             notificationType: json["notification_type"] as? String,
             herdr: HerdrLocation(environment: env),
-            // Claude Code and Codex name it differently; keep it bounded either way.
-            lastMessage: ["last_assistant_message", "last-assistant-message", "last_agent_message"]
-                .lazy.compactMap { json[$0] as? String }.first { !$0.isEmpty }.map { $0.prefixed(4000) },
+            // Claude Code, Codex and Gemini (AfterAgent) name it differently; keep it bounded either way.
+            lastMessage: ["last_assistant_message", "last-assistant-message", "last_agent_message", "prompt_response"]
+                .lazy.compactMap { json[$0] as? String }
+                .first { !$0.isEmpty && $0 != "[no response text]" }.map { $0.prefixed(4000) },
             transcriptPath: json["transcript_path"] as? String
         )
     }

@@ -253,6 +253,104 @@ final class ReportTests: XCTestCase {
     }
 }
 
+final class GeminiTests: XCTestCase {
+    func testSessionLogDedupesByMessageIDAndKeepsRewoundTokens() throws {
+        var agg = GeminiLogParser.parse(try fixture("gemini_session.jsonl"))
+        // g1 counted once though written three times; g2 counted though rewound afterwards.
+        XCTAssertEqual(agg.totalTokens, 1_070 + 1_230)
+        XCTAssertEqual(agg.models, ["gemini-3.1-pro"])
+        XCTAssertEqual(agg.activity.filter { $0.a == .prompt }.count, 1, "a tool result is not a prompt")
+        XCTAssertEqual(agg.activity.filter { $0.a == .tool }.count, 1)
+        // Unpriced until Google's list prices are added.
+        XCTAssertTrue(agg.entries.allSatisfy { $0.c == nil })
+
+        // Parsing appended bytes again adds nothing new.
+        let before = agg
+        _ = GeminiLogParser.parse(try fixture("gemini_session.jsonl"), into: &agg)
+        XCTAssertEqual(agg.totalTokens, before.totalTokens)
+        XCTAssertEqual(agg.activity.count, before.activity.count)
+    }
+
+    func testProjectComesFromTheFolder() {
+        let url = URL(fileURLWithPath: "/Users/x/.gemini/tmp/api-server/chats/session-2026-10-20T10-00-5f0c2a9e.jsonl")
+        XCTAssertEqual(GeminiLogParser.project(for: url), "api-server")
+        let sub = URL(fileURLWithPath: "/Users/x/.gemini/tmp/api-server/chats/5f0c2a9e/child.jsonl")
+        // Subagent sessions sit one level deeper, under the parent session's id.
+        XCTAssertEqual(GeminiLogParser.project(for: sub), "api-server")
+    }
+
+    func testQuotaBucketsBecomeOneWindowPerFamily() throws {
+        let windows = GeminiProvider.windows(try fixtureJSON("gemini_quota.json"))
+        XCTAssertEqual(windows.map(\.title), ["Pro", "Flash", "Flash Lite"])
+        // The fuller of the two Pro buckets.
+        XCTAssertEqual(windows[0].usedPercent, 60, accuracy: 0.001)
+        XCTAssertEqual(windows[0].resetsAt, DateParsing.iso("2026-10-21T07:00:00Z"))
+        XCTAssertEqual(windows[0].windowLength, 86_400)
+        XCTAssertEqual(windows[1].usedPercent, 5, accuracy: 0.001)
+        XCTAssertEqual(windows[2].usedPercent, 0)
+    }
+
+    func testAfterAgentCarriesTheReply() {
+        let e = AgentEvent.from(
+            hookInput: ["session_id": "s", "prompt": "hi", "prompt_response": "All done."],
+            agent: "gemini", kind: .stop, environment: [:]
+        )
+        XCTAssertEqual(e.lastMessage, "All done.")
+        let none = AgentEvent.from(hookInput: ["prompt_response": "[no response text]"], agent: "gemini", kind: .stop, environment: [:])
+        XCTAssertNil(none.lastMessage)
+    }
+
+    func testTranscriptTailReadsTheLastGeminiReply() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let chats = home.appendingPathComponent("tmp/api-server/chats")
+        try FileManager.default.createDirectory(at: chats, withIntermediateDirectories: true)
+        let file = chats.appendingPathComponent("session-2026-10-20T10-00-5f0c2a9e.jsonl")
+        try fixture("gemini_session.jsonl").write(to: file)
+        let found = try XCTUnwrap(TranscriptTail.locate(sessionID: "5f0c2a9e-1111-4c5e-9d21-aaaaaaaaaaaa", provider: .gemini, homes: [home]))
+        XCTAssertEqual(found.lastPathComponent, file.lastPathComponent)
+        XCTAssertEqual(TranscriptTail.lastReply(file: found).flatMap { ReplyExcerpt.make($0) }, "Done. Added the /health route and a test.")
+    }
+
+    func testHooksUseGeminiNamesMillisecondsAndKeepOthers() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let original = #"{"security":{"auth":{"selectedType":"oauth-personal"}},"hooks":{"SessionEnd":[{"matcher":"exit","hooks":[{"name":"tokentracker","type":"command","command":"notify --source=gemini"}]}]}}"#
+        try original.write(to: dir.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
+        let acct = Account(provider: .gemini, homePath: dir.path, label: "g")
+        let exe = "/Applications/Agentilo.app/Contents/MacOS/Agentilo"
+
+        try HookInstaller.install(for: acct, executable: exe, approvals: true, approvalTimeout: 60)
+        XCTAssertEqual(HookInstaller.status(for: acct, executable: exe, approvals: true), .installed)
+        let hooks = try XCTUnwrap(try HookInstaller.read(HookInstaller.configURL(for: acct)!)["hooks"] as? [String: Any])
+        XCTAssertEqual(Set(hooks.keys), ["SessionStart", "BeforeAgent", "BeforeTool", "AfterTool", "Notification", "AfterAgent", "SessionEnd"])
+        let after = try XCTUnwrap((hooks["AfterAgent"] as? [[String: Any]])?.first)
+        XCTAssertEqual(after["matcher"] as? String, "*")
+        let hook = try XCTUnwrap((after["hooks"] as? [[String: Any]])?.first)
+        XCTAssertEqual(hook["timeout"] as? Int, 5_000)
+        XCTAssertEqual(hook["name"] as? String, "agentilo-stop")
+        XCTAssertEqual(hook["command"] as? String, "'\(exe)' hook gemini stop # agentilo")
+        XCTAssertEqual((hooks["SessionEnd"] as? [[String: Any]])?.count, 2)
+        XCTAssertTrue(HookInstaller.geminiHooksEnabled(home: dir))
+
+        try HookInstaller.uninstall(for: acct)
+        let back = try HookInstaller.read(HookInstaller.configURL(for: acct)!)
+        XCTAssertEqual(back as NSDictionary, try JSONSerialization.jsonObject(with: Data(original.utf8)) as! NSDictionary)
+    }
+
+    func testCredentialsAreReadOnlyAndExpiryIsMilliseconds() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try #"{"access_token":"ya29.x","expiry_date":1784000000000,"refresh_token":"r"}"#
+            .write(to: dir.appendingPathComponent("oauth_creds.json"), atomically: true, encoding: .utf8)
+        try #"{"active":"me@example.com","old":[]}"#.write(to: dir.appendingPathComponent("google_accounts.json"), atomically: true, encoding: .utf8)
+        let c = try XCTUnwrap(GeminiCredentials.load(home: dir.path))
+        XCTAssertEqual(c.expiresAt, Date(timeIntervalSince1970: 1_784_000_000))
+        XCTAssertTrue(c.isExpired(now: Date(timeIntervalSince1970: 1_790_000_000)))
+        XCTAssertEqual(GeminiCredentials.email(home: dir.path), "me@example.com")
+        XCTAssertEqual(AccountDetector.defaultLabel(.gemini, dir.path), "me@example.com")
+    }
+}
+
 final class ProxyTests: XCTestCase {
     func testDirectDisablesProxies() {
         let c = SessionFactory.configuration(for: EffectiveProxy(config: ProxyConfig(kind: .direct)))

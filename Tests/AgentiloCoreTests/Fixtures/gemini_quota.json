@@ -1,0 +1,7 @@
+{"buckets":[
+ {"remainingAmount":"40","remainingFraction":0.4,"resetTime":"2026-10-21T07:00:00Z","tokenType":"REQUESTS","modelId":"gemini-3.1-pro"},
+ {"remainingAmount":"90","remainingFraction":0.9,"resetTime":"2026-10-21T07:00:00Z","tokenType":"REQUESTS","modelId":"gemini-3.1-pro-preview"},
+ {"remainingAmount":"950","remainingFraction":0.95,"resetTime":"2026-10-21T07:00:00Z","tokenType":"REQUESTS","modelId":"gemini-3.6-flash"},
+ {"remainingFraction":1,"modelId":"gemini-3.1-flash-lite"},
+ {"remainingAmount":"5"}
+]}

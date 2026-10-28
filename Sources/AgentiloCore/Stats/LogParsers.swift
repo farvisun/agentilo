@@ -239,7 +239,7 @@ public enum CodexLogParser {
                 agg.codexLast = now
                 let model = agg.codexModel ?? "unknown"
                 // Older logs carry only the total: count those as unpriced.
-                let cost = usage["input_tokens"] == nil ? nil : Pricing.openAICost(
+                let cost = usage["input_tokens"] == nil ? nil : Pricing.cachedInInputCost(
                     model: model, input: max(0, now.input - before.input),
                     cached: max(0, now.cached - before.cached), output: max(0, now.output - before.output)
                 )

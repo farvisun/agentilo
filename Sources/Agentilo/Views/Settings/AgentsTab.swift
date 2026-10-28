@@ -18,7 +18,7 @@ struct AgentsTab: View {
                 Toggle("Show the start of the agent's last reply", isOn: $state.settings.agentDoneSummary)
                 Toggle("Show a working agent's turn time in the collapsed notch", isOn: $state.settings.pillShowsAgents)
                 Text(HerdrSource.executable == nil
-                     ? "herdr is not installed. Hooks below still report Claude Code and Codex sessions."
+                     ? "herdr is not installed. Hooks below still report Claude Code, Codex and Gemini CLI sessions."
                      : "herdr reports every agent pane (working, blocked, idle); hooks add the current tool and approval details. Click an agent in the notch to jump to its pane in Ghostty.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -38,7 +38,7 @@ struct AgentsTab: View {
             Section("Hooks") {
                 let accounts = state.settings.accounts.filter { $0.enabled && $0.provider != .cursor }
                 if accounts.isEmpty {
-                    Text("No Claude Code or Codex homes configured.").foregroundStyle(.secondary)
+                    Text("No Claude Code, Codex or Gemini CLI homes configured.").foregroundStyle(.secondary)
                 }
                 ForEach(accounts) { acct in
                     HookRow(
@@ -53,7 +53,7 @@ struct AgentsTab: View {
                     Text("Run the bundled app (make run / make install) to install hooks.")
                         .font(.caption).foregroundStyle(.orange)
                 }
-                Text("Adds commands marked `# agentilo` to each home's settings.json (Claude Code) or hooks.json (Codex); other hooks stay untouched and the original file is kept as *.agentilo-bak. Install from /Applications so the path stays valid.")
+                Text("Adds commands marked `# agentilo` to each home's settings.json (Claude Code, Gemini CLI) or hooks.json (Codex); other hooks stay untouched and the original file is kept as *.agentilo-bak. Install from /Applications so the path stays valid.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -150,6 +150,12 @@ private struct HookRow: View {
                     .font(.caption).foregroundStyle(.orange)
             } else if account.provider == .codex, status == .installed {
                 Text("Codex asks you to trust new hooks the next time it starts.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else if account.provider == .gemini, !HookInstaller.geminiHooksEnabled(home: account.homeURL) {
+                Text("Gemini CLI has hooks turned off (`hooksConfig.enabled` in settings.json).")
+                    .font(.caption).foregroundStyle(.orange)
+            } else if account.provider == .gemini, status == .installed {
+                Text("Gemini CLI runs hooks only in folders you trust; approvals stay in the terminal.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let error {

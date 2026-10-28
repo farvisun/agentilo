@@ -305,6 +305,7 @@ struct AccountsTab: View {
         case .claude: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         case .codex: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         case .cursor: panel.directoryURL = URL(fileURLWithPath: CursorCredentials.defaultHome)
+        case .gemini: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         }
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }

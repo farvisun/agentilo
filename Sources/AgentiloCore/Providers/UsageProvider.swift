@@ -37,6 +37,7 @@ public enum UsageProviders {
         case .claude: ClaudeProvider()
         case .codex: CodexProvider()
         case .cursor: CursorProvider()
+        case .gemini: GeminiProvider()
         }
     }
 }

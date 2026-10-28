@@ -141,8 +141,9 @@ public final class StatsEngine: @unchecked Sendable {
         for acct in accounts where acct.enabled && acct.provider != .cursor {
             let home = Paths.expand(acct.homePath)
             guard homes.insert("\(acct.provider.rawValue):\(home)").inserted else { continue }
-            let root = acct.provider == .claude ? home + "/projects" : home + "/sessions"
-            for (url, mtime, size) in Self.logFiles(under: root, since: cutoff) {
+            guard let root = Self.logRoot(acct.provider, home: home) else { continue }
+            for (url, mtime, size) in Self.logFiles(under: root, since: cutoff)
+            where acct.provider != .gemini || url.path.contains("/chats/") {
                 jobs.append(Job(key: "\(acct.provider.rawValue):\(url.path)", provider: acct.provider, url: url, mtime: mtime, size: size))
             }
         }
@@ -264,13 +265,17 @@ public final class StatsEngine: @unchecked Sendable {
         do {
             try fh.seek(toOffset: UInt64(offset))
             let data = try fh.readToEnd() ?? Data()
-            let consumed = provider == .claude
-                ? ClaudeLogParser.parse(data, into: &agg)
-                : CodexLogParser.parse(data, into: &agg)
+            let consumed = switch provider {
+            case .claude: ClaudeLogParser.parse(data, into: &agg)
+            case .codex: CodexLogParser.parse(data, into: &agg)
+            case .gemini: GeminiLogParser.parse(data, into: &agg)
+            case .cursor: data.count
+            }
             agg.parsedBytes = offset + Int64(consumed)
         } catch {
             return nil
         }
+        if provider == .gemini, agg.project == nil { agg.project = GeminiLogParser.project(for: url) }
         agg.mtime = mtime
         agg.size = size
         return agg
@@ -351,6 +356,16 @@ public final class StatsEngine: @unchecked Sendable {
         stats.live.sort { $0.last > $1.last }
         stats.computedAt = now
         return stats
+    }
+
+    /// Where an agent keeps its session logs; Cursor keeps none we read.
+    static func logRoot(_ provider: Provider, home: String) -> String? {
+        switch provider {
+        case .claude: home + "/projects"
+        case .codex: home + "/sessions"
+        case .gemini: home + "/tmp"
+        case .cursor: nil
+        }
     }
 
     static func logFiles(under root: String, since cutoff: Date) -> [(URL, Double, Int64)] {
