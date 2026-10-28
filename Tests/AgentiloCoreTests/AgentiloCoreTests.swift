@@ -163,6 +163,84 @@ final class LogParserTests: XCTestCase {
     }
 }
 
+final class ReportTests: XCTestCase {
+    private func codexLine(_ ts: String, input: Int, cached: Int, output: Int) -> String {
+        #"{"timestamp":"\#(ts)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(input),"cached_input_tokens":\#(cached),"output_tokens":\#(output),"total_tokens":\#(input + output)}}}}"#
+    }
+
+    func testCodexDeltasArePricedByKind() {
+        let log = [
+            #"{"timestamp":"2026-10-20T10:00:00Z","type":"turn_context","payload":{"model":"gpt-6.1-sol"}}"#,
+            codexLine("2026-10-20T10:01:00Z", input: 1_000_000, cached: 800_000, output: 10_000),
+            codexLine("2026-10-20T10:01:01Z", input: 1_000_000, cached: 800_000, output: 10_000),
+            codexLine("2026-10-20T10:02:00Z", input: 2_000_000, cached: 1_800_000, output: 20_000),
+        ].joined(separator: "\n") + "\n"
+        let agg = CodexLogParser.parse(Data(log.utf8))
+        XCTAssertEqual(agg.totalTokens, 2_020_000)
+        // First: 200K uncached x $2 + 800K cached x $0.10 + 10K out x $10 = $0.58.
+        // The repeat adds nothing; the last adds 1M cached ($0.10) + 10K out ($0.10).
+        XCTAssertEqual(agg.entries.compactMap(\.c).reduce(0, +), 0.78, accuracy: 0.0001)
+        // Totals alone, as in older logs: counted, not priced.
+        XCTAssertTrue(CodexLogParser.parse(try! fixture("codex_session.jsonl")).entries.allSatisfy { $0.c == nil })
+    }
+
+    func testSummaryRecordsBreakdowns() throws {
+        let agg = ClaudeLogParser.parse(try fixture("claude_session.jsonl"))
+        let now = try XCTUnwrap(DateParsing.iso("2026-10-20T12:00:00Z"))
+        let stats = StatsEngine.summarize([("a", .claude, agg)], now: now)
+        let day = try XCTUnwrap(stats.history.first { $0.active })
+        XCTAssertEqual(day.projects?.values.reduce(0) { $0 + $1.tokens }, day.tokens)
+        XCTAssertEqual(day.providers?["claude"]?.tokens, day.tokens)
+        XCTAssertEqual(day.providers?["claude"]?.prompts, day.prompts)
+        XCTAssertEqual(day.models?.values.reduce(0) { $0 + $1.tokens }, day.tokens)
+    }
+
+    func testOldHistoryDecodesWithoutBreakdowns() throws {
+        let old = try JSONDecoder().decode([DayRecord].self, from: Data(#"[{"day":20260301,"tokens":5,"cost":0.5,"prompts":1,"tools":2}]"#.utf8))
+        XCTAssertEqual(old.first?.tokens, 5)
+        XCTAssertNil(old.first?.projects)
+    }
+
+    func testReportComparesPeriodsAndGroups() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let end = try XCTUnwrap(DateParsing.iso("2026-10-28T15:00:00Z"))
+        func day(_ back: Int, _ projects: [String: Int]?, tokens: Int? = nil) -> DayRecord {
+            let d = cal.date(byAdding: .day, value: -back, to: cal.startOfDay(for: end))!
+            var r = DayRecord(day: DayKey.int(d, calendar: cal))
+            r.tokens = tokens ?? projects!.values.reduce(0, +)
+            r.cost = Double(r.tokens) / 100
+            r.projects = projects?.mapValues { DayUsage(tokens: $0, cost: Double($0) / 100) }
+            return r
+        }
+        let history = [
+            day(0, ["api": 300, "web": 100]),
+            day(6, ["api": 100, "cli": 50, "docs": 10]),
+            day(7, ["api": 200]),        // the previous week
+            day(12, nil, tokens: 40),    // before breakdowns existed
+        ]
+        let r = ReportBuilder.report(history: history, days: 7, end: end, groupBy: .project, seriesGroups: 2, calendar: cal)
+        XCTAssertEqual(r.total.tokens, 560)
+        XCTAssertEqual(r.previous.tokens, 240)
+        XCTAssertEqual(r.activeDays, 2)
+        XCTAssertEqual(r.rows.map(\.name), ["api", "web", "cli", "docs"])
+        XCTAssertEqual(r.rows.first?.previous.tokens, 200)
+        XCTAssertEqual(r.rows.first?.share ?? 0, 400.0 / 560, accuracy: 0.0001)
+        XCTAssertEqual(Set(r.series.map(\.group)), ["api", "web", ReportBuilder.other])
+        XCTAssertEqual(Report.change(Double(r.total.tokens), Double(r.previous.tokens)) ?? 0, 560.0 / 240 - 1, accuracy: 0.0001)
+
+        let longer = ReportBuilder.report(history: history, days: 14, end: end, groupBy: .project, calendar: cal)
+        XCTAssertEqual(longer.rows.first { $0.name == ReportBuilder.unattributed }?.tokens, 40)
+    }
+
+    func testLastWeekStartsOnMonday() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let wednesday = try XCTUnwrap(DateParsing.iso("2026-10-28T15:00:00Z"))
+        XCTAssertEqual(ReportBuilder.lastWeekStart(now: wednesday, calendar: cal), DateParsing.iso("2026-10-19T00:00:00Z"))
+    }
+}
+
 final class ProxyTests: XCTestCase {
     func testDirectDisablesProxies() {
         let c = SessionFactory.configuration(for: EffectiveProxy(config: ProxyConfig(kind: .direct)))
@@ -730,7 +808,8 @@ final class ActivityStatsTests: XCTestCase {
         XCTAssertEqual(Pricing.rate(for: "claude-opus-5-5")?.input, 4)
         XCTAssertEqual(Pricing.rate(for: "claude-opus-5-20260101")?.input, 5)
         XCTAssertEqual(Pricing.rate(for: "claude-sonnet-4-6")?.output, 15)
-        XCTAssertNil(Pricing.rate(for: "gpt-6.1-sol"))
+        XCTAssertEqual(Pricing.rate(for: "gpt-6.1-sol")?.cacheRead, 0.10)
+        XCTAssertNil(Pricing.rate(for: "gpt-6-luna"))
         // 1M input + 1M output + 1M cache write + 1M cache read on Opus 5.5: 4 + 20 + 5 + 0.2.
         let c = try XCTUnwrap(Pricing.cost(model: "claude-opus-5-5", input: 1e6, output: 1e6, cacheWrite: 1e6, cacheRead: 1e6))
         XCTAssertEqual(c, 29.2, accuracy: 1e-9)

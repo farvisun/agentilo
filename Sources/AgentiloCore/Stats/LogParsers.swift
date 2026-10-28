@@ -59,6 +59,8 @@ public struct FileAggregate: Codable, Equatable, Sendable {
     public var project: String?
     /// Codex: running session total seen so far, to turn cumulative counts into deltas.
     public var codexLastTotal = 0
+    /// Codex: the same running totals split by kind, to price each delta.
+    public var codexLast = CodexTotals()
     public var codexModel: String?
     /// Codex: most recent rate-limit sample in this file.
     public var rateLimits: RateLimitSample?
@@ -84,6 +86,13 @@ public struct FileAggregate: Codable, Equatable, Sendable {
         if firstTimestamp == nil || date < firstTimestamp! { firstTimestamp = date }
         if lastTimestamp == nil || date > lastTimestamp! { lastTimestamp = date }
     }
+}
+
+/// Cumulative Codex token counts by kind (`total_token_usage`).
+public struct CodexTotals: Codable, Equatable, Sendable {
+    public var input = 0.0
+    public var cached = 0.0
+    public var output = 0.0
 }
 
 public enum DayKey {
@@ -217,9 +226,24 @@ public enum CodexLogParser {
                       let usage = J.dict(info["total_token_usage"]),
                       let total = J.double(usage["total_tokens"]).map(Int.init),
                       let date = DateParsing.iso(J.string(obj["timestamp"])) else { return }
-                let delta = total >= agg.codexLastTotal ? total - agg.codexLastTotal : total
+                // A smaller total means a new count started (e.g. a forked session).
+                let restarted = total < agg.codexLastTotal
+                let delta = restarted ? total : total - agg.codexLastTotal
                 agg.codexLastTotal = total
-                agg.add(delta, weighted: Double(delta), model: agg.codexModel ?? "unknown", at: date, key: 0)
+                let now = CodexTotals(
+                    input: J.double(usage["input_tokens"]) ?? 0,
+                    cached: J.double(usage["cached_input_tokens"]) ?? 0,
+                    output: J.double(usage["output_tokens"]) ?? 0
+                )
+                let before = restarted ? CodexTotals() : agg.codexLast
+                agg.codexLast = now
+                let model = agg.codexModel ?? "unknown"
+                // Older logs carry only the total: count those as unpriced.
+                let cost = usage["input_tokens"] == nil ? nil : Pricing.openAICost(
+                    model: model, input: max(0, now.input - before.input),
+                    cached: max(0, now.cached - before.cached), output: max(0, now.output - before.output)
+                )
+                agg.add(delta, weighted: Double(delta), cost: cost, model: model, at: date, key: 0)
             default:
                 break
             }

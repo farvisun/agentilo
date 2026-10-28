@@ -21,6 +21,23 @@ public struct ProjectTotal: Hashable, Sendable, Identifiable {
     public var id: String { name }
 }
 
+/// Tokens, cost and prompts of one project, model or provider on one day.
+public struct DayUsage: Codable, Hashable, Sendable {
+    public var tokens: Int = 0
+    public var cost: Double = 0
+    public var prompts: Int = 0
+
+    public init(tokens: Int = 0, cost: Double = 0, prompts: Int = 0) {
+        self.tokens = tokens
+        self.cost = cost
+        self.prompts = prompts
+    }
+
+    public static func + (a: DayUsage, b: DayUsage) -> DayUsage {
+        DayUsage(tokens: a.tokens + b.tokens, cost: a.cost + b.cost, prompts: a.prompts + b.prompts)
+    }
+}
+
 /// One day of activity across all agents, persisted in `daily-history.json`.
 public struct DayRecord: Codable, Hashable, Sendable, Identifiable {
     /// yyyymmdd.
@@ -29,9 +46,25 @@ public struct DayRecord: Codable, Hashable, Sendable, Identifiable {
     public var cost: Double = 0
     public var prompts: Int = 0
     public var tools: Int = 0
+    /// Breakdowns for reports; nil on days recorded before 0.4. Models carry no prompts,
+    /// since a prompt can be answered by several models.
+    public var projects: [String: DayUsage]?
+    public var models: [String: DayUsage]?
+    public var providers: [String: DayUsage]?
     public var id: Int32 { day }
 
     public var active: Bool { tokens > 0 || prompts > 0 }
+}
+
+extension DayRecord {
+    mutating func add(_ u: DayUsage, project: String, model: String?, provider: Provider) {
+        projects = projects ?? [:]
+        providers = providers ?? [:]
+        models = models ?? [:]
+        projects![project] = (projects![project] ?? DayUsage()) + u
+        providers![provider.rawValue] = (providers![provider.rawValue] ?? DayUsage()) + u
+        if let model { models![model] = (models![model] ?? DayUsage()) + u }
+    }
 }
 
 public struct LiveSession: Hashable, Sendable, Identifiable {
@@ -82,8 +115,12 @@ public final class StatsEngine: @unchecked Sendable {
 
     private let historyURL: URL
 
-    public init(cacheURL: URL = Paths.appSupport.appendingPathComponent("stats-cache-v4.json")) {
+    /// v5 adds Codex prices and per-day breakdowns, so every log is read once more.
+    public init(cacheURL: URL = Paths.appSupport.appendingPathComponent("stats-cache-v5.json")) {
         self.cacheURL = cacheURL
+        for old in 2...4 {
+            try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent().appendingPathComponent("stats-cache-v\(old).json"))
+        }
         historyURL = cacheURL.deletingLastPathComponent().appendingPathComponent("daily-history.json")
         if let data = try? Data(contentsOf: cacheURL),
            let c = try? JSONDecoder().decode([String: FileAggregate].self, from: data) {
@@ -268,6 +305,8 @@ public final class StatsEngine: @unchecked Sendable {
                 if e.k != 0 { guard seen.insert(e.k).inserted else { continue } }
                 dayMap[e.d, default: [:]][f.provider, default: 0] += e.t
                 records[e.d, default: DayRecord(day: e.d)].tokens += e.t
+                let usage = DayUsage(tokens: e.t, cost: e.c ?? 0)
+                records[e.d]!.add(usage, project: f.agg.project ?? "session", model: f.agg.models[Int(e.m)], provider: f.provider)
                 if let c = e.c {
                     costMap[e.d, default: 0] += c
                     records[e.d, default: DayRecord(day: e.d)].cost += c
@@ -283,7 +322,9 @@ public final class StatsEngine: @unchecked Sendable {
             for a in f.agg.activity {
                 if a.k != 0 { guard seenActivity.insert(a.k).inserted else { continue } }
                 switch a.a {
-                case .prompt: records[a.d, default: DayRecord(day: a.d)].prompts += 1
+                case .prompt:
+                    records[a.d, default: DayRecord(day: a.d)].prompts += 1
+                    records[a.d]!.add(DayUsage(prompts: 1), project: f.agg.project ?? "session", model: nil, provider: f.provider)
                 case .tool: records[a.d, default: DayRecord(day: a.d)].tools += 1
                 }
                 if a.d == todayKey { activeToday = true }

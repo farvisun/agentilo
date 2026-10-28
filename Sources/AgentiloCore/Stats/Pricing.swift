@@ -1,6 +1,6 @@
 import Foundation
 
-/// Anthropic API list prices, for an "what would this cost on the API" estimate.
+/// Anthropic and OpenAI API list prices, for a "what would this cost on the API" estimate.
 /// Plans are not billed per token; this only puts usage in familiar units.
 public enum Pricing {
     /// USD per million tokens.
@@ -26,6 +26,9 @@ public enum Pricing {
         ("claude-sonnet-4", Rate(input: 3, output: 15, cacheRead: 0.30)),
         ("claude-haiku-5-5", Rate(input: 0.10, output: 0.50, cacheRead: 0.01)),
         ("claude-haiku-4", Rate(input: 1, output: 5, cacheRead: 0.10)),
+        // OpenAI standard tier (Codex), from developers.openai.com/api/docs/pricing, 2026-10-28.
+        ("gpt-6.1-sol", Rate(input: 2, output: 10, cacheRead: 0.10)),
+        ("gpt-6-astra", Rate(input: 10, output: 50, cacheRead: 1.0)),
     ].sorted { $0.prefix.count > $1.prefix.count }
 
     public static func rate(for model: String) -> Rate? {
@@ -37,5 +40,11 @@ public enum Pricing {
     public static func cost(model: String, input: Double, output: Double, cacheWrite: Double, cacheRead: Double) -> Double? {
         guard let r = rate(for: model) else { return nil }
         return (input * r.input + output * r.output + cacheWrite * r.cacheWrite + cacheRead * r.cacheRead) / 1_000_000
+    }
+
+    /// OpenAI counts cached tokens inside `input`, and reasoning inside `output`.
+    public static func openAICost(model: String, input: Double, cached: Double, output: Double) -> Double? {
+        guard let r = rate(for: model) else { return nil }
+        return (max(0, input - cached) * r.input + cached * r.cacheRead + output * r.output) / 1_000_000
     }
 }
