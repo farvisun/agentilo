@@ -48,7 +48,7 @@
   <div class="notch-stage" aria-hidden="true">
     <div class="notch" id="notch" data-scene="idle">
       <div class="notch-pill">
-        <span class="wing wing-left"><span class="ring" style="--p:.64;--c:var(--amber)"></span></span>
+        <span class="wing wing-left"><span class="ring" style="--p:.64;--c:var(--amber)"></span><span class="spin"><i></i><b>2</b></span><span class="pill-time">4m</span></span>
         <span class="notch-gap"></span>
         <span class="wing wing-right"><span class="pill-pct">64%</span><span class="pill-dot"></span></span>
       </div>
@@ -101,7 +101,7 @@
           <ul class="agents">
             <li class="waiting"><svg class="logo"><use href="#logo-claude"/></svg><div><b>web-app</b><small>Waiting for approval · Bash</small></div><span class="spacer"></span><span class="state amber"><span class="dot amber pulse"></span>needs you</span></li>
             <li><svg class="logo"><use href="#logo-codex"/></svg><div><b>api-server</b><small>Edit · AppState.swift</small></div><span class="spacer"></span><span class="state green"><span class="dot green"></span>working</span></li>
-            <li><svg class="logo"><use href="#logo-claude"/></svg><div><b>ui-polish</b><small>Read · NotchShape.swift</small></div><span class="spacer"></span><span class="state green"><span class="dot green"></span>working</span></li>
+            <li><svg class="logo"><use href="#logo-gemini"/></svg><div><b>ui-polish</b><small>ReadFile · NotchShape.swift</small></div><span class="spacer"></span><span class="state green"><span class="dot green"></span>working</span></li>
             <li class="done"><svg class="logo"><use href="#logo-claude"/></svg><div><b>docs</b><small>Finished · 12m turn</small></div><span class="spacer"></span><span class="state faint">✓ done</span></li>
           </ul>
         </section>
@@ -134,7 +134,79 @@
             </div>
           </div>
         </section>
+
+        <!-- Scene: switch accounts -->
+        <section class="scene" data-for="switch">
+          <header class="acct">
+            <svg class="logo"><use href="#logo-claude"/></svg>
+            <div><b>Claude</b><small>~/.claude</small></div>
+            <span class="plan">Max 5x</span>
+            <span class="spacer"></span>
+            <small class="dim">just now</small>
+          </header>
+          <div class="win">
+            <div class="win-head"><span>Session</span><b class="pct">44%</b><span class="spacer"></span><em class="pace">On track</em></div>
+            <div class="meter"><i style="--f:.44"></i><u style="--x:.5"></u></div>
+          </div>
+          <div class="win">
+            <div class="win-head"><span>Weekly</span><b class="pct red">91%</b><span class="spacer"></span><em class="pace red">Runs out Thu 6:10 PM</em></div>
+            <div class="meter red"><i style="--f:.91"></i><u style="--x:.7"></u></div>
+          </div>
+          <footer class="switch"><span class="swap">⇄</span><b>Switch to Work</b><small class="dim">88% left</small><span class="spacer"></span><span class="copy-btn"><span>Copy command</span><span>Copied</span></span></footer>
+          <nav class="pager"><i></i><i class="on"></i><i></i><i></i></nav>
+        </section>
+
+        <!-- Scene: quiet -->
+        <section class="scene" data-for="quiet">
+          <header class="row-head"><span class="sym">☾</span><b>Quiet</b><span class="spacer"></span><small class="faint">Snoozed until 8:00 AM</small></header>
+          <div class="quiet">
+            <ul class="menu">
+              <li>Snooze 1 hour</li>
+              <li class="on">Until tomorrow 8:00</li>
+              <li>Until I turn it back on</li>
+              <li class="sep">Resume alerts</li>
+            </ul>
+            <dl class="quiet-facts">
+              <dt>Quiet hours</dt><dd>Weekdays 22:00 – 08:00</dd>
+              <dt>Focus</dt><dd>Shortcuts → <code>agentilo quiet on</code></dd>
+              <dt>Still shown</dt><dd><span class="dot amber"></span>Approvals · limit reached</dd>
+            </dl>
+          </div>
+        </section>
+
+        <!-- Scene: reports -->
+        <section class="scene" data-for="reports">
+          <div class="reports">
+            <div class="rep-total">
+              <small class="dim">Last 7 days</small><b>≈ $284</b>
+              <small class="amber">+7% vs the week before</small>
+              <span>41.2M tokens</span><small class="faint">1,082 prompts · 7 of 7 days</small>
+              <span class="open-btn">Open Reports</span>
+            </div>
+            <div class="rep-list">
+              <small class="dim">Top projects</small>
+              <div class="bar" style="--f:1"><span>web-app</span><em>≈ $108</em><i></i></div>
+              <div class="bar" style="--f:.62"><span>api-server</span><em>≈ $67</em><i></i></div>
+              <div class="bar" style="--f:.41"><span>ui-polish</span><em>≈ $44</em><i></i></div>
+              <div class="bar" style="--f:.22"><span>docs</span><em>≈ $24</em><i></i></div>
+            </div>
+            <div class="rep-list">
+              <small class="dim">Top models</small>
+              <div class="bar" style="--f:1"><span>claude-opus-5-5</span><em>≈ $221</em><i></i></div>
+              <div class="bar" style="--f:.22"><span>gpt-6.1-sol</span><em>≈ $48</em><i></i></div>
+              <div class="bar" style="--f:.07"><span>claude-haiku-5-5</span><em>≈ $15</em><i></i></div>
+            </div>
+          </div>
+        </section>
       </div>
+    </div>
+
+    <!-- When a turn finishes, the alert carries the start of the reply. -->
+    <div class="alert alert-done" id="alertDone">
+      <svg class="logo"><use href="#logo-claude"/></svg>
+      <div><b>Claude finished</b><small>api-server · after 4m · 12 tools</small>
+        <p>Done. Added the /health route with a test, and all 61 tests pass. I left the old ping route in place for now.</p></div>
+      <span class="dot green"></span>
     </div>
 
     <!-- An alert drops out of the notch in the alerts chapter. -->
@@ -178,21 +250,21 @@
     <!-- Marquee -->
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
-        <span>Session limits</span><i>◐</i><span>Weekly limits</span><i>◐</i><span>Pace, not panic</span><i>◐</i><span>Run-out forecasts</span><i>◐</i><span>Live agents</span><i>◐</i><span>Approvals</span><i>◐</i><span>26-week heatmap</span><i>◐</i><span>Local API</span><i>◐</i>
-        <span>Session limits</span><i>◐</i><span>Weekly limits</span><i>◐</i><span>Pace, not panic</span><i>◐</i><span>Run-out forecasts</span><i>◐</i><span>Live agents</span><i>◐</i><span>Approvals</span><i>◐</i><span>26-week heatmap</span><i>◐</i><span>Local API</span><i>◐</i>
+        <span>Session limits</span><i>◐</i><span>Weekly limits</span><i>◐</i><span>Pace, not panic</span><i>◐</i><span>Run-out forecasts</span><i>◐</i><span>Live agents</span><i>◐</i><span>Approvals</span><i>◐</i><span>Reply previews</span><i>◐</i><span>Quiet hours</span><i>◐</i><span>Account switching</span><i>◐</i><span>Weekly reports</span><i>◐</i><span>26-week heatmap</span><i>◐</i><span>Local API</span><i>◐</i>
+        <span>Session limits</span><i>◐</i><span>Weekly limits</span><i>◐</i><span>Pace, not panic</span><i>◐</i><span>Run-out forecasts</span><i>◐</i><span>Live agents</span><i>◐</i><span>Approvals</span><i>◐</i><span>Reply previews</span><i>◐</i><span>Quiet hours</span><i>◐</i><span>Account switching</span><i>◐</i><span>Weekly reports</span><i>◐</i><span>26-week heatmap</span><i>◐</i><span>Local API</span><i>◐</i>
       </div>
     </div>
 
     <!-- Tour: the notch at the top acts out each chapter -->
     <section class="tour" id="tour" aria-label="Tour">
       <ol class="rail" aria-hidden="true">
-        <li data-ch="limits">01</li><li data-ch="pace">02</li><li data-ch="alert">03</li><li data-ch="agents">04</li><li data-ch="approval">05</li><li data-ch="activity">06</li>
+        <li data-ch="limits">01</li><li data-ch="pace">02</li><li data-ch="switch">03</li><li data-ch="alert">04</li><li data-ch="quiet">05</li><li data-ch="agents">06</li><li data-ch="done">07</li><li data-ch="approval">08</li><li data-ch="activity">09</li><li data-ch="reports">10</li>
       </ol>
 
       <article class="chapter" data-scene="limits">
         <p class="ch-num">01 · Limits</p>
         <h2>Every plan window, <span class="serif">one glance up.</span></h2>
-        <p>Collapsed, the notch shows a ring and a number for the account closest to trouble. Hover and it opens into session and weekly meters, reset times and the session you are in right now. Scroll to page through accounts. When one runs low, it points to the home with room left and copies the command that starts it.</p>
+        <p>Collapsed, the notch shows a ring and a number for the account closest to trouble. Hover and it opens into session and weekly meters, reset times and the session you are in right now. Scroll to page through accounts.</p>
         <ul class="facts"><li>Every agent home is its own account: <code>~/.claude</code>, <code>~/.claude_multi/*</code>, <code>~/.codex*</code>, <code>~/.gemini</code>, Cursor</li><li>Found automatically on first launch</li></ul>
       </article>
 
@@ -203,31 +275,57 @@
         <ul class="facts"><li><span class="tag green">On track</span> within 5 points of the clock</li><li><span class="tag amber">Ahead of pace</span> up to 12 points over</li><li><span class="tag red">Runs out 7:24 PM</span> when the trend beats the reset</li></ul>
       </article>
 
+      <article class="chapter" data-scene="switch">
+        <p class="ch-num">03 · Accounts</p>
+        <h2>Running low? <span class="serif">Switch homes.</span></h2>
+        <p>Two Claude or Codex homes? When one reaches 85% of a window, the account page and the limit alert point to the one with the most room left, and copy the command that starts your agent there.</p>
+        <ul class="facts"><li><code>CLAUDE_CONFIG_DIR=~/.claude_work claude</code>, <code>CODEX_HOME=~/.codex_work codex</code></li><li>Or open it straight in Ghostty, iTerm2 or Terminal</li></ul>
+      </article>
+
       <article class="chapter" data-scene="alert">
-        <p class="ch-num">03 · Alerts</p>
+        <p class="ch-num">04 · Alerts</p>
         <h2>It taps you on the shoulder. <span class="serif">Then gets out of the way.</span></h2>
         <p>At 75%, 90% and 100% of a window, an alert drops out of the notch with the projected run-out time. Another one says when a window resets. No dock icon, no menu bar clutter, optional sound. Full-screen apps keep the notch hidden.</p>
-        <ul class="facts"><li>Quiet hours on a schedule, or snooze from the notch</li><li>Follows a macOS Focus with one Shortcuts automation and <code>agentilo quiet</code></li><li>Approvals and limit-reached alerts can still come through</li></ul>
+      </article>
+
+      <article class="chapter" data-scene="quiet">
+        <p class="ch-num">05 · Quiet</p>
+        <h2>Heads down. <span class="serif">The notch keeps quiet.</span></h2>
+        <p>Set quiet hours for the evening, or tap the moon to snooze for an hour, until morning, or until you say so. Approvals and limit-reached alerts still get through, unless you silence those too.</p>
+        <ul class="facts"><li>Follows a macOS Focus: one Shortcuts automation runs <code>agentilo quiet on</code></li><li><code>agentilo quiet 45m</code>, <code>off</code> or <code>status</code> from any script</li></ul>
       </article>
 
       <article class="chapter" data-scene="agents">
-        <p class="ch-num">04 · Agents</p>
+        <p class="ch-num">06 · Agents</p>
         <h2>All your agents, <span class="serif">one pulse.</span></h2>
-        <p>Running Claude Code, Codex and Gemini CLI sessions, what each is doing, and which one is waiting for you. A dot on the pill pulses when one needs input; while one works, the pill spins with the turn time. When it finishes, the alert shows the start of its reply, so you know whether to look. Click a row to jump to its pane.</p>
+        <p>Running Claude Code, Codex and Gemini CLI sessions, what each is doing, and which one is waiting for you. A dot on the pill pulses when one needs input. Click a row to jump to its pane.</p>
         <ul class="facts"><li>Reads <a href="https://herdr.dev">herdr</a> and/or Claude Code, Codex and Gemini CLI hooks</li><li>Hooks are marked and reversible; your other hooks stay untouched</li></ul>
       </article>
 
+      <article class="chapter" data-scene="done">
+        <p class="ch-num">07 · Replies</p>
+        <h2>Finished? <span class="serif">Read the gist first.</span></h2>
+        <p>While an agent works, the pill spins with its turn time. When it finishes, the alert shows the start of its reply and how many tools it used, so you know whether the window needs you yet.</p>
+        <ul class="facts"><li>From the agents' own hooks, or the end of the transcript</li><li>The reply stays on your Mac; the local API never serves it</li></ul>
+      </article>
+
       <article class="chapter" data-scene="approval">
-        <p class="ch-num">05 · Approvals</p>
+        <p class="ch-num">08 · Approvals</p>
         <h2>Say yes <span class="serif">without switching windows.</span></h2>
         <p>Opt in and Claude Code permission prompts show up in the notch with the full command and Allow, Deny or Always. Leave one unanswered and it goes back to the terminal after a timeout, as does any prompt for the pane you are already looking at.</p>
       </article>
 
       <article class="chapter" data-scene="activity">
-        <p class="ch-num">06 · Activity</p>
+        <p class="ch-num">09 · Activity</p>
         <h2>Half a year of work, <span class="serif">in one glance.</span></h2>
         <p>A 26-week heatmap and streak, today's prompts, tool calls and sessions, top projects, and what it all would cost at API list prices. Daily totals are kept on disk, so history outlives the agents' own 30-day log cleanup.</p>
-        <ul class="facts"><li>A Reports window by project, model or agent, 7 days to 26 weeks</li><li>A Monday-morning summary of last week</li></ul>
+      </article>
+
+      <article class="chapter" data-scene="reports">
+        <p class="ch-num">10 · Reports</p>
+        <h2>Where the week <span class="serif">went.</span></h2>
+        <p>This week against the last: cost at API list prices, tokens, prompts, and the projects and models behind them. On Monday morning a summary drops in. The Reports window charts 7 days to 26 weeks by project, model or agent.</p>
+        <ul class="facts"><li>Claude at Anthropic's list prices, Codex at OpenAI's</li><li>Split by project and model, kept beyond the agents' 30-day log cleanup</li></ul>
       </article>
     </section>
 
@@ -314,7 +412,7 @@
   <footer class="footer">
     <div class="footer-mark" aria-hidden="true">agentilo</div>
     <div class="footer-row">
-      <p>MIT licensed. Not affiliated with Anthropic, OpenAI or Anysphere. Logos are trademarks of their owners.</p>
+      <p>MIT licensed. Not affiliated with Anthropic, OpenAI, Google or Anysphere. Logos are trademarks of their owners.</p>
       <nav aria-label="Footer">
         <a href="https://github.com/farvisun/agentilo">GitHub</a>
         <a href="https://github.com/farvisun/agentilo/releases">Releases</a>

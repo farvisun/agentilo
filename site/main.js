@@ -29,8 +29,9 @@
     idle: [0.64, "amber", "64%"], hover: [0.64, "amber", "64%"], limits: [0.64, "amber", "64%"],
     pace: [0.81, "red", "81%"], alert: [0.9, "red", "90%"], agents: [0.81, "red", "81%"],
     approval: [0.81, "red", "81%"], activity: [0.38, "green", "38%"],
+    switch: [0.91, "red", "91%"], quiet: [0.64, "amber", "64%"], done: [0.64, "amber", "64%"], reports: [0.38, "green", "38%"],
   };
-  const openScenes = new Set(["limits", "pace", "agents", "approval", "activity"]);
+  const openScenes = new Set(["limits", "pace", "switch", "quiet", "agents", "approval", "activity", "reports"]);
 
   let pageScene = "idle";
   let hovering = false;
@@ -41,6 +42,7 @@
     notch.classList.toggle("open", open);
     notch.dataset.scene = scene;
     stage.classList.toggle("alerting", pageScene === "alert" && !hovering);
+    playTurn(pageScene === "done" && !hovering);
     for (const s of scenes) s.classList.toggle("on", open && s.dataset.for.split(" ").includes(scene));
     const [p, color, text] = pill[scene] ?? pill.idle;
     ring.style.setProperty("--p", p);
@@ -49,6 +51,21 @@
     pillPct.style.color = `var(--${color})`;
     document.documentElement.style.setProperty("--aura", open ? 0.55 : 1);
     $$(".rail li").forEach((li) => li.classList.toggle("on", li.dataset.ch === pageScene));
+  }
+
+  // The replies chapter: the pill spins through a turn, then the reply drops down.
+  let turnTimer = null, turnOn = false;
+  function playTurn(on) {
+    if (on === turnOn) return;
+    turnOn = on;
+    clearTimeout(turnTimer);
+    stage.classList.remove("finished");
+    stage.classList.toggle("working", on);
+    if (!on) return;
+    turnTimer = setTimeout(() => {
+      stage.classList.remove("working");
+      stage.classList.add("finished");
+    }, reduced ? 0 : 2200);
   }
 
   notch.addEventListener("mouseenter", () => { hovering = true; render(); });
@@ -95,7 +112,7 @@
       t.el.textContent = `resets ${day}${fmtTime(at)} · ${countdown(left)}`;
     }
     if (runOut) runOut.textContent = `Runs out ${fmtDay(runOutAt)} ${fmtTime(runOutAt)}`;
-    const alertLine = $(".alert small");
+    const alertLine = $("#alert small");
     if (alertLine) alertLine.textContent = `Runs out ${fmtDay(runOutAt)} ${fmtTime(runOutAt)} · resets ${fmtDay(codexReset)} ${fmtTime(codexReset)}`;
     const cd = $(".countdown");
     if (cd) cd.textContent = `${Math.max(1, 48 - (Math.floor((now - t0) / 1000) % 48))}s`;

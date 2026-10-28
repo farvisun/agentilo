@@ -1,6 +1,6 @@
 import Foundation
 
-/// Adds and removes Agentilo' own entries in an agent's hook config, leaving everything
+/// Adds and removes Agentilo's own entries in an agent's hook config, leaving everything
 /// else as it was. Claude Code and Gemini CLI keep hooks in `<home>/settings.json`, Codex in
 /// `<home>/hooks.json`; all use `{"hooks": {"<Event>": [{"matcher"?, "hooks": [{"type": "command", "command"}]}]}}`.
 /// Gemini names events differently, wants a name per hook and counts timeouts in milliseconds.
