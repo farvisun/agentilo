@@ -462,6 +462,7 @@ final class AppState {
             errors: statuses.compactMapValues(\.error),
             includeLabels: settings.apiIncludeLabels,
             origin: "app",
+            keepAwake: keepAwakeLevel,
             now: Date()
         )
     }

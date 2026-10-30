@@ -10,6 +10,8 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
     /// "app" when served by the running app, "cache" when read from disk without it.
     public var origin: String
     public var accounts: [AccountLimits]
+    /// While Keep awake holds sleep off: "idle" or "lidClosed". Absent otherwise.
+    public var keepAwake: KeepAwakeLevel?
 
     public struct AccountLimits: Codable, Equatable, Sendable {
         public var id: UUID
@@ -41,6 +43,7 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
         errors: [UUID: String] = [:],
         includeLabels: Bool,
         origin: String,
+        keepAwake: KeepAwakeLevel? = nil,
         now: Date = Date()
     ) -> LimitsPayload {
         var counters: [Provider: Int] = [:]
@@ -58,7 +61,10 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
                 windows: (snap?.windows ?? []).map { window($0, now: now) }
             )
         }
-        return LimitsPayload(version: currentVersion, generatedAt: now, origin: origin, accounts: items)
+        return LimitsPayload(
+            version: currentVersion, generatedAt: now, origin: origin, accounts: items,
+            keepAwake: keepAwake == .off ? nil : keepAwake
+        )
     }
 
     static func window(_ w: UsageWindow, now: Date) -> WindowLimits {
@@ -78,11 +84,17 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
         )
     }
 
-    /// One line for a status bar: "Claude S 16% W 7% · Codex S 12% W 61%".
+    /// One line for a status bar: "Claude S 16% W 7% · Codex S 12% W 61%", plus "awake" or
+    /// "awake (lid)" while Keep awake holds sleep off.
     /// Accounts of one provider are told apart only when there are several.
     public func shortLine() -> String {
         let perProvider = Dictionary(grouping: accounts, by: \.provider).mapValues(\.count)
-        return accounts.filter { !$0.windows.isEmpty }.map { a in
+        let awake: [String] = switch keepAwake {
+        case .idle?: ["awake"]
+        case .lidClosed?: ["awake (lid)"]
+        case .off?, nil: []
+        }
+        return (accounts.filter { !$0.windows.isEmpty }.map { a in
             let name = (perProvider[a.provider] ?? 0) > 1 ? a.label : a.provider.displayName
             let parts = a.windows.prefix(2).map { w -> String in
                 let letter = switch w.kind {
@@ -94,6 +106,6 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
                 return "\(letter) \(Int(w.usedPercent.rounded()))%\(w.pace == "limitReached" || w.pace == "runsOut" ? "!" : "")"
             }
             return ([name] + parts).joined(separator: " ")
-        }.joined(separator: " · ")
+        } + awake).joined(separator: " · ")
     }
 }

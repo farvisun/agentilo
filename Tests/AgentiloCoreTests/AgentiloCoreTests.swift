@@ -622,6 +622,23 @@ final class LocalAPITests: XCTestCase {
         XCTAssertEqual(labeled.accounts[0].label, "me@example.com")
     }
 
+    func testShortLineShowsKeepAwake() throws {
+        let a = Account(provider: .claude, homePath: "~/.claude", label: "me@example.com")
+        let snap = UsageSnapshot(windows: [
+            UsageWindow(id: "s", kind: .session, title: "Session", usedPercent: 16, resetsAt: nil, windowLength: nil),
+        ])
+        let build = { (level: KeepAwakeLevel?) in
+            LimitsPayload.build(accounts: [a], snapshots: [a.id: snap], includeLabels: false, origin: "app", keepAwake: level)
+        }
+        XCTAssertEqual(build(.idle).shortLine(), "Claude S 16% · awake")
+        XCTAssertEqual(build(.lidClosed).shortLine(), "Claude S 16% · awake (lid)")
+        XCTAssertEqual(build(.off).shortLine(), "Claude S 16%")
+        XCTAssertNil(build(.off).keepAwake)
+        let decoded = try APIJSON.decoder.decode(LimitsPayload.self, from: APIJSON.encoder.encode(build(.idle)))
+        XCTAssertEqual(decoded.keepAwake, .idle)
+        XCTAssertFalse(try XCTUnwrap(String(data: APIJSON.encoder.encode(build(nil)), encoding: .utf8)).contains("keepAwake"))
+    }
+
     func testServerAnswersOverLoopback() async throws {
         let port: UInt16 = 46_737
         let server = LocalServer(port: port) { req in .json(["path": req.path]) }

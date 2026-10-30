@@ -10,6 +10,7 @@ enum LimitsCommand {
 
       --json    machine-readable output (stable, versioned)
       --short   one line for a status bar, e.g. "Claude S 16% W 7% · Codex S 12% W 61%"
+                (ends in "· awake" while Keep awake holds the Mac awake)
       --force   ask the app to refetch from the providers first (waits up to 15s)
     """
 
