@@ -45,11 +45,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" build/Agentilo.zip build/appcast.xml \
-            --title "Agentilo $GITHUB_REF_NAME" --generate-notes \
-            --notes "Install with \`brew install --cask farvisun/tap/agentilo\`, or download Agentilo.zip below. Existing installs update themselves.
+          version="${GITHUB_REF_NAME#v}"
+          # This version's section of CHANGELOG.md, then how to install.
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^\[/ { exit }
+            on { print }
+          ' CHANGELOG.md > build/notes.md
+          test -s build/notes.md || echo "Agentilo $version" > build/notes.md
+          cat >> build/notes.md <<'EOF'
 
-          Downloading by hand: the app is ad-hoc signed, not notarized. After moving it to /Applications, run \`xattr -dr com.apple.quarantine /Applications/Agentilo.app\` once, or right-click → Open."
+          ### Install
+
+          Install with `brew install --cask farvisun/tap/agentilo`, or download Agentilo.zip below. Existing installs update themselves.
+
+          Downloading by hand: the app is ad-hoc signed, not notarized. After moving it to /Applications, run `xattr -dr com.apple.quarantine /Applications/Agentilo.app` once, or right-click → Open.
+          EOF
+          gh release create "$GITHUB_REF_NAME" build/Agentilo.zip build/appcast.xml \
+            --title "Agentilo $GITHUB_REF_NAME" --notes-file build/notes.md
 
   cask:
     needs: release
