@@ -36,6 +36,10 @@ final class AppState {
             }
             if settings.refreshInterval != oldValue.refreshInterval { startLoop() }
             if settings.apiEnabled != oldValue.apiEnabled || settings.apiPort != oldValue.apiPort { startServer() }
+            if settings.keepAwake != oldValue.keepAwake || settings.keepAwakeLidClosed != oldValue.keepAwakeLidClosed
+                || settings.keepAwakeMinBattery != oldValue.keepAwakeMinBattery {
+                updateKeepAwake()
+            }
         }
     }
 
@@ -53,6 +57,10 @@ final class AppState {
     var approvals: [PendingApproval] = []
     /// The notch is out of sight (an app is full screen on its display).
     var notchHidden = false
+    /// What sleep is held off right now (Settings → Agents → Keep awake).
+    var keepAwakeLevel = KeepAwakeLevel.off
+    var keepAwakeHelperInstalled = KeepAwakeHelper.isInstalled
+    @ObservationIgnored let sleepGuard = SleepGuard()
 
     var notchMode: NotchMode {
         if !approvals.isEmpty { return .approval }
@@ -433,7 +441,14 @@ final class AppState {
             }
             if request.action != .status { request.apply(to: &settings) }
             return .json(QuietStatus(quietReason))
-        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"), (_, "/v1/permission"), (_, "/v1/quiet"):
+        case ("POST", "/v1/awake"):
+            guard (req.headers[HookToken.header] ?? req.headers[HookToken.legacyHeader]) == hookToken else { return .error(401, "bad token") }
+            guard let request = try? APIJSON.decoder.decode(AwakeRequest.self, from: req.body) else {
+                return .error(400, "bad request")
+            }
+            if request.action != .status { request.apply(to: &settings) }
+            return .json(awakeStatus)
+        case (_, "/v1/health"), (_, "/v1/limits"), (_, "/v1/events"), (_, "/v1/permission"), (_, "/v1/quiet"), (_, "/v1/awake"):
             return .error(405, "method not allowed")
         default:
             return .error(404, "not found")

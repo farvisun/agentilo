@@ -68,6 +68,7 @@ struct ExpandedView: View {
                     state.refreshStats()
                 }
                 QuietMenu(state: state)
+                AwakeMenu(state: state)
                 IconButton(symbol: "gearshape", help: "Settings") { openSettings() }
                 IconButton(symbol: "power", help: "Quit Agentilo") { NSApp.terminate(nil) }
                     .padding(.trailing, 8)
@@ -122,6 +123,50 @@ private struct QuietMenu: View {
         let cal = Calendar.current
         let tomorrow = cal.date(byAdding: .day, value: 1, to: now) ?? now
         return cal.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+    }
+}
+
+/// Keep the Mac awake while agents work. The cup fills while it is holding sleep off.
+private struct AwakeMenu: View {
+    @Bindable var state: AppState
+    @State private var hover = false
+
+    var body: some View {
+        let holding = state.keepAwakeLevel != .off
+        Menu {
+            Toggle("Keep awake while agents work", isOn: $state.settings.keepAwake)
+            if state.keepAwakeHelperInstalled {
+                Toggle("Also with the lid closed", isOn: $state.settings.keepAwakeLidClosed)
+                    .disabled(!state.settings.keepAwake)
+            } else {
+                Button("Lid closed: install the helper in Settings") {}
+                    .disabled(true)
+            }
+            if state.settings.keepAwake {
+                Divider()
+                Button(Self.statusText(state.keepAwakeLevel, working: state.workingAgents)) {}
+                    .disabled(true)
+            }
+        } label: {
+            Image(systemName: holding ? "cup.and.saucer.fill" : "cup.and.saucer")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(holding ? Palette.green : (hover ? Color.white : Palette.secondary))
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.white.opacity(hover ? 0.12 : 0)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { hover = $0 }
+        .help(holding ? "Keeping the Mac awake while agents work" : "Keep awake while agents work")
+    }
+
+    static func statusText(_ level: KeepAwakeLevel, working: Int) -> String {
+        switch level {
+        case .off: working > 0 ? "Not holding: battery low" : "Waiting for an agent to work"
+        case .idle: "Holding idle sleep off"
+        case .lidClosed: "Holding all sleep off, lid closed too"
+        }
     }
 }
 

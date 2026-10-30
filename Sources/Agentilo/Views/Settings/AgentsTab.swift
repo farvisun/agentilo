@@ -24,6 +24,8 @@ struct AgentsTab: View {
                     .foregroundStyle(.secondary)
             }
 
+            KeepAwakeSection(state: state)
+
             Section("Approvals") {
                 Toggle("Answer Claude Code permission prompts from the notch", isOn: $state.settings.approvalsEnabled)
                 Picker("Hand back to the terminal after", selection: $state.settings.approvalTimeout) {
@@ -223,5 +225,56 @@ enum CLIInstaller {
     static func uninstall() throws {
         guard (try? FileManager.default.destinationOfSymbolicLink(atPath: linkPath)) != nil else { return }
         try FileManager.default.removeItem(atPath: linkPath)
+    }
+}
+
+/// Keep the Mac awake while agents work, and the root helper for the lid-closed mode.
+private struct KeepAwakeSection: View {
+    @Bindable var state: AppState
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        Section("Keep awake") {
+            Toggle("Keep the Mac awake while an agent works", isOn: $state.settings.keepAwake)
+            Toggle("Also with the lid closed", isOn: $state.settings.keepAwakeLidClosed)
+                .disabled(!state.settings.keepAwake || !state.keepAwakeHelperInstalled)
+            HStack {
+                Text(helperText)
+                Spacer()
+                if busy {
+                    ProgressView().controlSize(.small)
+                } else if state.keepAwakeHelperInstalled {
+                    Button("Remove") { change(state.removeKeepAwakeHelper) }
+                } else {
+                    Button(KeepAwakeHelper.isPresent ? "Update…" : "Install…") { change(state.installKeepAwakeHelper) }
+                }
+            }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+            Picker("On battery, allow sleep below", selection: $state.settings.keepAwakeMinBattery) {
+                Text("Never").tag(0)
+                ForEach([10, 15, 20, 30], id: \.self) { Text("\($0)%").tag($0) }
+            }
+            .disabled(!state.settings.keepAwake)
+            Text("While an agent is working (from herdr or the hooks below), idle sleep is held off, on battery too; the screen still turns off and locks. Closing the lid sleeps the Mac unless the helper is installed: a small root service that turns sleep off only while Agentilo says an agent works, and back on within 90 seconds after the last one finishes or Agentilo quits. Don't put a working Mac in a bag; it stays awake and heats up.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var helperText: String {
+        if state.keepAwakeHelperInstalled { return "Lid-closed helper installed" }
+        return KeepAwakeHelper.isPresent ? "Lid-closed helper is out of date" : "Lid-closed helper not installed"
+    }
+
+    private func change(_ action: @escaping () async -> String?) {
+        busy = true
+        Task {
+            let result = await action()
+            error = result == "Cancelled" ? nil : result
+            busy = false
+        }
     }
 }

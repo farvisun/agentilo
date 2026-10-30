@@ -1023,3 +1023,78 @@ final class AccountAdvisorTests: XCTestCase {
         XCTAssertEqual(AccountAdvisor.shellPath("/Volumes/My Disk/.claude"), "'/Volumes/My Disk/.claude'")
     }
 }
+
+final class KeepAwakeTests: XCTestCase {
+    let plugged = PowerSource(onBattery: false, percent: 80)
+
+    func level(working: Int = 1, enabled: Bool = true, lid: Bool = false, helper: Bool = false,
+               power: PowerSource? = nil, minBattery: Int = 15) -> KeepAwakeLevel {
+        KeepAwake.level(working: working, enabled: enabled, lidClosed: lid, helperInstalled: helper,
+                        power: power ?? plugged, minBattery: minBattery)
+    }
+
+    func testHoldsOnlyWhileEnabledAndWorking() {
+        XCTAssertEqual(level(), .idle)
+        XCTAssertEqual(level(working: 0), .off)
+        XCTAssertEqual(level(enabled: false), .off)
+    }
+
+    func testLidClosedNeedsTheHelper() {
+        XCTAssertEqual(level(lid: true, helper: true), .lidClosed)
+        XCTAssertEqual(level(lid: true, helper: false), .idle)
+        XCTAssertEqual(level(lid: false, helper: true), .idle)
+    }
+
+    func testBatteryCutoff() {
+        let low = PowerSource(onBattery: true, percent: 12)
+        XCTAssertEqual(level(lid: true, helper: true, power: low), .off)
+        XCTAssertEqual(level(power: low, minBattery: 10), .idle)
+        XCTAssertEqual(level(power: low, minBattery: 0), .idle)
+        XCTAssertEqual(level(power: PowerSource(onBattery: false, percent: 5)), .idle)
+        XCTAssertEqual(level(power: PowerSource(onBattery: true, percent: nil)), .idle)
+    }
+
+    func testRequestParsingAndApply() {
+        XCTAssertEqual(AwakeRequest(arguments: [])?.action, .status)
+        XCTAssertEqual(AwakeRequest(arguments: ["ON"])?.action, .on)
+        XCTAssertEqual(AwakeRequest(arguments: ["lid", "off"])?.action, .lidOff)
+        XCTAssertNil(AwakeRequest(arguments: ["lid"]))
+        XCTAssertNil(AwakeRequest(arguments: ["2h"]))
+
+        var s = AppSettings()
+        AwakeRequest(action: .on).apply(to: &s)
+        AwakeRequest(action: .lidOn).apply(to: &s)
+        XCTAssertTrue(s.keepAwake && s.keepAwakeLidClosed)
+        AwakeRequest(action: .off).apply(to: &s)
+        XCTAssertFalse(s.keepAwake)
+        XCTAssertTrue(s.keepAwakeLidClosed)
+    }
+
+    func testStatusLine() {
+        var s = AppSettings()
+        XCTAssertEqual(AwakeStatus(settings: s, helperInstalled: false, level: .off, working: 0).line, "Keep awake: off")
+        s.keepAwake = true
+        s.keepAwakeLidClosed = true
+        XCTAssertEqual(AwakeStatus(settings: s, helperInstalled: true, level: .lidClosed, working: 2).line,
+                       "Keep awake: on (lid closed too); holding for 2 working agents")
+        XCTAssertTrue(AwakeStatus(settings: s, helperInstalled: false, level: nil, working: 0).line
+            .contains("needs the helper"))
+    }
+
+    func testSettingsDefaultWhenMissing() throws {
+        let s = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertFalse(s.keepAwake)
+        XCTAssertFalse(s.keepAwakeLidClosed)
+        XCTAssertEqual(s.keepAwakeMinBattery, 15)
+    }
+
+    func testHelperCommandsQuotePaths() {
+        let cmd = KeepAwakeHelper.installCommand(stagedScript: "/tmp/it's/helper.sh", stagedPlist: "/tmp/p.plist")
+        XCTAssertTrue(cmd.contains("'/tmp/it'\\''s/helper.sh'"))
+        XCTAssertTrue(cmd.contains("launchctl bootstrap system \(KeepAwakeHelper.plistPath)"))
+        XCTAssertTrue(KeepAwakeHelper.uninstallCommand.contains("pmset -a disablesleep 0"))
+        let script = KeepAwakeHelper.appleScript(#"echo "a\b""#)
+        XCTAssertEqual(script, #"do shell script "echo \"a\\b\"" with administrator privileges"#)
+        XCTAssertTrue(KeepAwakeHelper.plist(flagPath: "/Users/a&b/flag").contains("/Users/a&amp;b/flag"))
+    }
+}

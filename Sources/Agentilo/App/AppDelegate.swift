@@ -28,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--preview-reports") { openReports() }
     }
 
+    /// Never leave the Mac held awake after quitting.
+    func applicationWillTerminate(_ notification: Notification) {
+        state?.sleepGuard.hold(.off)
+    }
+
     /// Reopening the app from Finder or Spotlight shows Settings, since there is no Dock icon.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         openSettings()

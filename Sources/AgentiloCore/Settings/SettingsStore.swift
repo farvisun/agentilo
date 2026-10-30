@@ -152,6 +152,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var snoozeUntil: Date?
     /// Quiet until turned off (`agentilo quiet on`, a Focus automation).
     public var quietManual = false
+    /// Hold off sleep while an agent is working.
+    public var keepAwake = false
+    /// Also with the lid closed, through the root helper.
+    public var keepAwakeLidClosed = false
+    /// On battery below this percentage the Mac may sleep anyway; 0 never stops it.
+    public var keepAwakeMinBattery = 15
 
     public init() {}
 
@@ -191,6 +197,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         quietAllowUrgent = try c.decodeIfPresent(Bool.self, forKey: .quietAllowUrgent) ?? d.quietAllowUrgent
         snoozeUntil = try c.decodeIfPresent(Date.self, forKey: .snoozeUntil)
         quietManual = try c.decodeIfPresent(Bool.self, forKey: .quietManual) ?? d.quietManual
+        keepAwake = try c.decodeIfPresent(Bool.self, forKey: .keepAwake) ?? d.keepAwake
+        keepAwakeLidClosed = try c.decodeIfPresent(Bool.self, forKey: .keepAwakeLidClosed) ?? d.keepAwakeLidClosed
+        keepAwakeMinBattery = try c.decodeIfPresent(Int.self, forKey: .keepAwakeMinBattery) ?? d.keepAwakeMinBattery
     }
 
     public func quietReason(now: Date = Date()) -> QuietReason? {

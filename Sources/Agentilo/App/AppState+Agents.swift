@@ -34,6 +34,7 @@ extension AppState {
                     if let list { self.notify(self.agents.applyHerdr(list)) }
                 }
                 self.agents.prune()
+                self.updateKeepAwake()
                 // Poll faster while something is happening.
                 let busy = self.agents.sessions.values.contains { $0.state == .working || $0.state.needsAttention }
                 try? await Task.sleep(for: .seconds(busy ? 1.5 : 4))
@@ -44,6 +45,7 @@ extension AppState {
     func receive(_ event: AgentEvent, alert: Bool = true) {
         let transitions = agents.apply(event)
         if alert { notify(transitions) }
+        updateKeepAwake()
         // The turn moved on without us (answered in the terminal, interrupted): drop its prompt.
         if [.prompt, .postTool, .stop, .sessionEnd].contains(event.kind) {
             let key = AgentSessionStore.key(agent: event.agent, sessionID: event.sessionID, herdr: event.herdr)

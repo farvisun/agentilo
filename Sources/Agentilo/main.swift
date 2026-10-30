@@ -17,12 +17,15 @@ case "hook":
     exit(await HookCommand.run(Array(cliArgs.dropFirst())))
 case "quiet":
     exit(await QuietCommand.run(Array(cliArgs.dropFirst())))
+case "awake":
+    exit(await AwakeCommand.run(Array(cliArgs.dropFirst())))
 case "help", "-h", "--help":
     print("""
     usage: agentilo <command>
 
       limits    print plan limits (see `agentilo limits --help`)
       quiet     silence alerts: on, off, 1h, status (see `agentilo quiet --help`)
+      awake     keep the Mac awake while agents work: on, off, lid on, status
 
     Run without a command to start the notch app.
     """)
