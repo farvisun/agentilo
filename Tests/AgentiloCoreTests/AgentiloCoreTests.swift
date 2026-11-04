@@ -1243,4 +1243,59 @@ final class StatsAccuracyTests: XCTestCase {
         XCTAssertEqual(agg.totalTokens, 2_500)
         XCTAssertEqual(agg.entries.count, 2, "an unchanged total is a repeat, not usage")
     }
+
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).resolvingSymlinksInPath()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    private func todayTokens(_ stats: TokenStats) -> Int { stats.history.last?.tokens ?? 0 }
+
+    func testHomesSharingOneSessionsFolderCountOnce() throws {
+        let tmp = try tempDir()
+        let now = Date()
+        let iso = ISO8601DateFormatter().string(from: now)
+        let main = tmp.appendingPathComponent("codex")
+        let sessions = main.appendingPathComponent("sessions/2026/05/12")
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        try data([tokenCount(1_000, at: iso)]).write(to: sessions.appendingPathComponent("rollout-1.jsonl"))
+        let linked = tmp.appendingPathComponent("codex_work")
+        try FileManager.default.createDirectory(at: linked, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: linked.appendingPathComponent("sessions"), withDestinationURL: main.appendingPathComponent("sessions"))
+
+        let one = Account(provider: .codex, homePath: main.path, label: "main")
+        let two = Account(provider: .codex, homePath: linked.path, label: "work")
+        let engine = StatsEngine(cacheURL: tmp.appendingPathComponent("cache.json"))
+        XCTAssertEqual(todayTokens(engine.compute(accounts: [one, two], now: now)), 1_000)
+        XCTAssertEqual(todayTokens(engine.compute(accounts: [two, one], now: now)), 1_000)
+
+        // A home whose sessions folder is only a link still reads its logs.
+        let onlyLinked = StatsEngine(cacheURL: tmp.appendingPathComponent("cache2.json"))
+        XCTAssertEqual(todayTokens(onlyLinked.compute(accounts: [two], now: now)), 1_000)
+        // Those logs may belong to any account sharing the folder, so they say nothing about its limits.
+        XCTAssertEqual(onlyLinked.weightedTokens(provider: .codex, home: linked.path, from: .distantPast, to: now), 0)
+        XCTAssertNil(onlyLinked.latestRateLimits(home: linked.path))
+    }
+
+    func testClaudeNestedWorkflowLogsCountOnce() throws {
+        let tmp = try tempDir()
+        let now = Date()
+        let iso = ISO8601DateFormatter().string(from: now)
+        func response(_ id: String) -> String {
+            #"{"timestamp":"\#(iso)","requestId":"req-\#(id)","message":{"id":"\#(id)","model":"claude-sonnet-5","usage":{"input_tokens":100,"output_tokens":10}}}"#
+        }
+        let session = tmp.appendingPathComponent("claude/projects/app")
+        let nested = session.appendingPathComponent("session/subagents/workflows/review")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        try data([response("a")]).write(to: session.appendingPathComponent("session.jsonl"))
+        // One new response, and one copied from the parent.
+        try data([response("b"), response("a")]).write(to: nested.appendingPathComponent("agent-1.jsonl"))
+
+        let account = Account(provider: .claude, homePath: tmp.appendingPathComponent("claude").path, label: "claude")
+        let engine = StatsEngine(cacheURL: tmp.appendingPathComponent("cache.json"))
+        XCTAssertEqual(todayTokens(engine.compute(accounts: [account], now: now)), 220)
+    }
 }

@@ -141,8 +141,10 @@ public final class StatsEngine: @unchecked Sendable {
         var homes = Set<String>()
         for acct in accounts where acct.enabled && acct.provider != .cursor {
             let home = Paths.expand(acct.homePath)
-            guard homes.insert("\(acct.provider.rawValue):\(home)").inserted else { continue }
             guard let root = Self.logRoot(acct.provider, home: home) else { continue }
+            // Homes can share one log folder through a link; its files count once.
+            let resolved = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
+            guard homes.insert("\(acct.provider.rawValue):\(resolved)").inserted else { continue }
             for (url, mtime, size) in Self.logFiles(under: root, since: cutoff)
             where acct.provider != .gemini || url.path.contains("/chats/") {
                 jobs.append(Job(key: "\(acct.provider.rawValue):\(url.path)", provider: acct.provider, url: url, mtime: mtime, size: size))
@@ -225,6 +227,7 @@ public final class StatsEngine: @unchecked Sendable {
 
     /// Cost-weighted tokens logged in one home in `(from, to]`, deduplicated. Uses the last scan.
     public func weightedTokens(provider: Provider, home: String, from: Date, to: Date) -> Double {
+        guard !Self.sharesLogs(provider, home: home) else { return 0 }
         lock.lock()
         defer { lock.unlock() }
         let prefix = "\(provider.rawValue):\(Paths.expand(home))/"
@@ -243,6 +246,7 @@ public final class StatsEngine: @unchecked Sendable {
 
     /// Newest `rate_limits` sample Codex wrote in any session log of this home.
     public func latestRateLimits(home: String) -> RateLimitSample? {
+        guard !Self.sharesLogs(.codex, home: home) else { return nil }
         lock.lock()
         defer { lock.unlock() }
         let prefix = "\(Provider.codex.rawValue):\(Paths.expand(home))/"
@@ -369,16 +373,24 @@ public final class StatsEngine: @unchecked Sendable {
         }
     }
 
+    /// A log folder linked from elsewhere holds other accounts' logs too, so it says nothing
+    /// about this account's limits.
+    static func sharesLogs(_ provider: Provider, home: String) -> Bool {
+        guard let root = logRoot(provider, home: Paths.expand(home)) else { return false }
+        return (try? FileManager.default.destinationOfSymbolicLink(atPath: root)) != nil
+    }
+
     static func logFiles(under root: String, since cutoff: Date) -> [(URL, Double, Int64)] {
         let fm = FileManager.default
+        // The enumerator does not descend into a root that is itself a link.
+        let resolvedRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
         guard fm.fileExists(atPath: root),
               let e = fm.enumerator(
-                  at: URL(fileURLWithPath: root),
+                  at: URL(fileURLWithPath: resolvedRoot),
                   includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey],
                   options: [.skipsHiddenFiles]
               ) else { return [] }
         var out: [(URL, Double, Int64)] = []
-        let resolvedRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
         for case let url as URL in e where url.pathExtension == "jsonl" {
             guard let v = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]),
                   v.isRegularFile == true,
