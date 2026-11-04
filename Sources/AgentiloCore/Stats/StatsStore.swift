@@ -115,10 +115,11 @@ public final class StatsEngine: @unchecked Sendable {
 
     private let historyURL: URL
 
-    /// v5 adds Codex prices and per-day breakdowns, so every log is read once more.
-    public init(cacheURL: URL = Paths.appSupport.appendingPathComponent("stats-cache-v5.json")) {
+    /// v6 stops counting the parent history in Codex child sessions and prices one-hour cache writes,
+    /// so every log is read once more.
+    public init(cacheURL: URL = Paths.appSupport.appendingPathComponent("stats-cache-v6.json")) {
         self.cacheURL = cacheURL
-        for old in 2...4 {
+        for old in 2...5 {
             try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent().appendingPathComponent("stats-cache-v\(old).json"))
         }
         historyURL = cacheURL.deletingLastPathComponent().appendingPathComponent("daily-history.json")

@@ -64,6 +64,12 @@ public struct FileAggregate: Codable, Equatable, Sendable {
     public var codexModel: String?
     /// Codex: most recent rate-limit sample in this file.
     public var rateLimits: RateLimitSample?
+    /// Codex: the file's own `session_meta` was read; a child log replays its parent's after it.
+    public var codexSawMeta = false
+    /// Codex: still inside the parent history a child log starts with.
+    public var codexInReplay = false
+    /// Codex: when a child session was created, in Unix seconds.
+    public var codexCreatedAt: Double?
 
     public init() {}
 
@@ -201,6 +207,11 @@ public enum ClaudeLogParser {
 
 /// Codex: `<home>/sessions/YYYY/MM/DD/rollout-*.jsonl`. `token_count` events carry a running
 /// session total, so each event contributes its delta (robust to repeated events).
+///
+/// Subagent and forked sessions start with a replay of the parent's whole log under rewritten
+/// timestamps. Nothing in it is new: it only seeds the running totals. It ends at the first
+/// `task_started` whose `started_at` is not older than the child session, since replayed turns
+/// keep the parent's original start time.
 public enum CodexLogParser {
     public static func parse(_ data: Data, into agg: inout FileAggregate) -> Int {
         LogLines.forEach(in: data, markers: [
@@ -209,24 +220,38 @@ public enum CodexLogParser {
             let payload = J.dict(obj["payload"]) ?? [:]
             switch J.string(obj["type"]) {
             case "response_item" where ["function_call", "custom_tool_call", "local_shell_call"].contains(J.string(payload["type"]) ?? ""):
+                guard !agg.codexInReplay else { return }
                 if let date = DateParsing.iso(J.string(obj["timestamp"])) {
                     agg.addActivity(.tool, id: J.string(payload["call_id"]), at: date)
                 }
             case "event_msg" where J.string(payload["type"]) == "task_started":
-                if let date = DateParsing.iso(J.string(obj["timestamp"])) { agg.addActivity(.prompt, id: nil, at: date) }
+                let date = DateParsing.iso(J.string(obj["timestamp"]))
+                if agg.codexInReplay {
+                    guard let startedAt = J.double(payload["started_at"]),
+                          let gate = agg.codexCreatedAt ?? date.map({ $0.timeIntervalSince1970.rounded(.down) }),
+                          startedAt >= gate else { return }
+                    agg.codexInReplay = false
+                }
+                if let date { agg.addActivity(.prompt, id: nil, at: date) }
             case "session_meta":
+                guard !agg.codexSawMeta else { return }
+                agg.codexSawMeta = true
                 if let cwd = J.string(payload["cwd"]) { agg.project = (cwd as NSString).lastPathComponent }
+                if isChild(payload) {
+                    agg.codexInReplay = true
+                    agg.codexCreatedAt = DateParsing.iso(J.string(payload["timestamp"]))?.timeIntervalSince1970.rounded(.down)
+                }
             case "turn_context":
                 if let m = J.string(payload["model"]) { agg.codexModel = m }
             case "event_msg" where J.string(payload["type"]) == "token_count":
-                if let sample = rateLimits(J.dict(payload["rate_limits"]), at: DateParsing.iso(J.string(obj["timestamp"]))) {
+                if !agg.codexInReplay, let sample = rateLimits(J.dict(payload["rate_limits"]), at: DateParsing.iso(J.string(obj["timestamp"]))) {
                     agg.rateLimits = sample
                 }
                 guard let info = J.dict(payload["info"]),
                       let usage = J.dict(info["total_token_usage"]),
                       let total = J.double(usage["total_tokens"]).map(Int.init),
                       let date = DateParsing.iso(J.string(obj["timestamp"])) else { return }
-                // A smaller total means a new count started (e.g. a forked session).
+                // A smaller total means a new count started.
                 let restarted = total < agg.codexLastTotal
                 let delta = restarted ? total : total - agg.codexLastTotal
                 agg.codexLastTotal = total
@@ -237,6 +262,7 @@ public enum CodexLogParser {
                 )
                 let before = restarted ? CodexTotals() : agg.codexLast
                 agg.codexLast = now
+                guard !agg.codexInReplay else { return }
                 let model = agg.codexModel ?? "unknown"
                 // Older logs carry only the total: count those as unpriced.
                 let cost = usage["input_tokens"] == nil ? nil : Pricing.cachedInInputCost(
@@ -248,6 +274,20 @@ public enum CodexLogParser {
                 break
             }
         }
+    }
+
+    /// Whether a `session_meta` names a parent. JSON null means no parent.
+    static func isChild(_ meta: [String: Any]) -> Bool {
+        func present(_ v: Any?) -> Bool {
+            switch v {
+            case nil, is NSNull: false
+            case let s as String: !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            default: true
+            }
+        }
+        return present(meta["forked_from_id"]) || present(meta["parent_thread_id"])
+            || J.string(meta["thread_source"]) == "subagent"
+            || present(J.dict(meta["source"])?["subagent"])
     }
 
     public static func parse(_ data: Data) -> FileAggregate {

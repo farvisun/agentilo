@@ -1157,3 +1157,90 @@ final class KeepAwakeTests: XCTestCase {
         XCTAssertTrue(KeepAwakeHelper.plist(flagPath: "/Users/a&b/flag").contains("/Users/a&amp;b/flag"))
     }
 }
+
+final class StatsAccuracyTests: XCTestCase {
+    private let created = "2026-05-12T08:00:00.000Z"
+    private let createdEpoch = 1_778_572_800 // 2026-05-12T08:00:00Z
+
+    private func tokenCount(_ total: Int, at time: String, limitPercent: Double? = nil) -> String {
+        let limits = limitPercent.map { #","rate_limits":{"primary":{"used_percent":\#($0),"window_minutes":300}}"# } ?? ""
+        return #"{"timestamp":"\#(time)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(total),"cached_input_tokens":0,"output_tokens":0,"total_tokens":\#(total)}}\#(limits)}}"#
+    }
+
+    private func taskStarted(_ startedAt: Int, at time: String) -> String {
+        #"{"timestamp":"\#(time)","type":"event_msg","payload":{"type":"task_started","started_at":\#(startedAt)}}"#
+    }
+
+    private func meta(_ extra: String, id: String = "child") -> String {
+        #"{"timestamp":"\#(created)","type":"session_meta","payload":{"id":"\#(id)","timestamp":"\#(created)","cwd":"/work/\#(id)"\#(extra)}}"#
+    }
+
+    /// A child log: its own meta, the parent's meta, replayed turns, then one live turn.
+    private func childLog(_ extra: String) -> [String] {
+        [
+            meta(extra),
+            meta("", id: "parent"),
+            taskStarted(createdEpoch - 3_600, at: "2026-05-12T08:00:00.000Z"),
+            #"{"timestamp":"2026-05-12T08:00:01.000Z","type":"response_item","payload":{"type":"function_call","call_id":"replayed"}}"#,
+            tokenCount(1_000, at: "2026-05-12T08:00:01.000Z", limitPercent: 99),
+            tokenCount(2_000, at: "2026-05-12T08:00:03.000Z"),
+            taskStarted(createdEpoch + 5, at: "2026-05-12T08:00:05.000Z"),
+            tokenCount(2_500, at: "2026-05-12T08:00:06.000Z", limitPercent: 12),
+        ]
+    }
+
+    private func data(_ lines: [String]) -> Data { Data((lines.joined(separator: "\n") + "\n").utf8) }
+
+    func testCodexChildCountsOnlyItsOwnTurns() {
+        for extra in [
+            #","forked_from_id":"parent""#,
+            #","parent_thread_id":"parent""#,
+            #","thread_source":"subagent""#,
+            #","source":{"subagent":{"thread_spawn":{}}}"#,
+        ] {
+            let agg = CodexLogParser.parse(data(childLog(extra)))
+            XCTAssertEqual(agg.totalTokens, 500, extra)
+            XCTAssertEqual(agg.activity.filter { $0.a == .prompt }.count, 1, extra)
+            XCTAssertEqual(agg.activity.filter { $0.a == .tool }.count, 0, extra)
+            XCTAssertEqual(agg.project, "child", extra)
+            XCTAssertEqual(agg.rateLimits?.primary?.usedPercent, 12, extra)
+        }
+    }
+
+    func testCodexReplayStateSurvivesIncrementalParsing() {
+        let lines = childLog(#","forked_from_id":"parent""#)
+        for split in 1..<lines.count {
+            var agg = FileAggregate()
+            _ = CodexLogParser.parse(data(Array(lines[..<split])), into: &agg)
+            // The cache stores the state between reads, so round-trip it the same way.
+            let stored = try! JSONDecoder().decode(FileAggregate.self, from: JSONEncoder().encode(agg))
+            agg = stored
+            _ = CodexLogParser.parse(data(Array(lines[split...])), into: &agg)
+            XCTAssertEqual(agg.totalTokens, 500, "split at \(split)")
+        }
+    }
+
+    func testCodexChildWithoutLiveTurnCountsNothing() {
+        let lines = Array(childLog(#","forked_from_id":"parent""#).prefix(6))
+        XCTAssertEqual(CodexLogParser.parse(data(lines)).totalTokens, 0)
+    }
+
+    func testCodexChildWithoutCreationTimeUsesTheLineTime() {
+        var lines = childLog(#","forked_from_id":"parent""#)
+        lines[0] = #"{"timestamp":"\#(created)","type":"session_meta","payload":{"id":"child","forked_from_id":"parent"}}"#
+        XCTAssertEqual(CodexLogParser.parse(data(lines)).totalTokens, 500)
+    }
+
+    func testCodexRootSessionKeepsEverything() {
+        let lines = [
+            meta(#","forked_from_id":null,"parent_thread_id":null,"source":{"subagent":null}"#),
+            taskStarted(createdEpoch - 3_600, at: "2026-05-12T08:00:00.000Z"),
+            tokenCount(1_000, at: "2026-05-12T08:00:01.000Z"),
+            tokenCount(1_000, at: "2026-05-12T08:00:02.000Z"),
+            tokenCount(2_500, at: "2026-05-12T08:00:03.000Z"),
+        ]
+        let agg = CodexLogParser.parse(data(lines))
+        XCTAssertEqual(agg.totalTokens, 2_500)
+        XCTAssertEqual(agg.entries.count, 2, "an unchanged total is a repeat, not usage")
+    }
+}
