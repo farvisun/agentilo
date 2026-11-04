@@ -5,7 +5,7 @@
 <h1 align="center">Agentilo</h1>
 
 <p align="center">
-  Claude Code, Codex, Gemini CLI and Cursor plan limits, paced, beside your MacBook notch.<br>
+  Claude Code, Codex, Gemini CLI, Cursor, Copilot and OpenRouter limits, paced, beside your MacBook notch.<br>
   <a href="https://farvisun.github.io/agentilo/"><strong>Website</strong></a> ·
   <a href="https://github.com/farvisun/agentilo/releases/latest"><strong>Download</strong></a>
 </p>
@@ -36,18 +36,22 @@ This also links the `agentilo` command. Or install by hand:
    ```
    or right-click the app → Open, or allow it in System Settings → Privacy & Security.
 
-Agentilo finds your agent homes (`~/.claude`, `~/.codex`, `~/.gemini`, Cursor) on first launch. Hover the notch.
+Agentilo finds your agent homes (`~/.claude`, `~/.codex`, `~/.gemini`, Cursor) on first launch. Copilot and OpenRouter are added by hand in Settings → Accounts. Hover the notch.
 
 Or build it yourself: `git clone https://github.com/farvisun/agentilo && cd agentilo && make install`.
 
 ### Updates
 
-Agentilo checks for a new release once a day and asks before installing it (Settings → General → Updates). Updates are verified with an EdDSA signature ([Sparkle](https://sparkle-project.org)) and replace the app in place, so hooks and the `agentilo` command keep working. Because the app is ad-hoc signed, macOS may ask once after an update before it reads a proxy password Agentilo stored in the Keychain.
+Agentilo checks for a new release once a day and asks before installing it (Settings → General → Updates). Updates are verified with an EdDSA signature ([Sparkle](https://sparkle-project.org)) and replace the app in place, so hooks and the `agentilo` command keep working. Because the app is ad-hoc signed, macOS may ask once after an update before it reads a proxy password or OpenRouter key Agentilo stored in the Keychain.
 
 ## Features
 
 - **Collapsed**: ring + percentage of the most critical account, colored by pace. While an agent works, the left wing shows a spinner and the turn time (with a count when several work at once). Or rotate through every tracked account, with the animation, timing and speed set in Settings → General (in click-to-expand mode, two-finger swipe to move by hand).
 - **Hover**: notch expands with session/weekly meters, reset times, pace ("On track", "Ahead of pace", "Runs out 7:24 PM"), live session row. Scroll or use arrows to page through accounts and the token stats page.
+- **Global shortcut**: open and close the notch from anywhere (Settings → General, none by default). Opened this way it stays open until the shortcut, Esc or a click outside.
+- **Copy image**: the picture button on an account's page copies its limits as an image, without the email or account name.
+- **Hide while captured** (opt-in): while the screen is shared or recorded the notch steps aside and holds alerts, as for a full-screen app, and approvals go back to the terminal. Detection reads a private window server flag; if a future macOS removes it, only remote sessions are noticed. An app that captures the screen all the time keeps the notch hidden.
+- **Limit resets**: Codex accounts show how many one-off limit resets are available and when the next one expires. Agentilo only counts them and never spends one. Claude reports its resets only to Claude Code, so they do not appear.
 - **Alerts**: drop down out of the notch at 75%, 90% and 100% of a window (with the projected run-out time) and when a window resets. Optional sound. Settings → Alerts.
 - **Quiet mode**: quiet hours on a schedule (wrapping past midnight, per weekday), snooze from the moon menu in the expanded notch, and `agentilo quiet on|off|45m|2h|status` for scripts. Approvals and limit-reached alerts still come through unless you turn that off. To follow a macOS Focus, add a Shortcuts automation (When Focus turns on → Run Shell Script `agentilo quiet on`, and `off` when it turns off).
 - **Keep awake**: while an agent is working, the Mac does not idle-sleep, on battery too; the screen still turns off and locks, so the network stays up and agents keep going. With the optional root helper (installed from Settings → Agents with an admin password), it also stays awake with the lid closed: the helper turns `pmset disablesleep` on only while Agentilo reports a working agent and back on within 90 seconds after the last one finishes or the app quits. Stops below a battery level you choose (default 15%). Toggle it from the cup in the expanded notch or `agentilo awake on|off|lid on|lid off|status`, and `agentilo limits --short` ends in `· awake` while it holds the Mac awake.
@@ -56,7 +60,7 @@ Agentilo checks for a new release once a day and asks before installing it (Sett
 - **Approvals** (opt-in): Claude Code permission prompts appear in the notch with Allow / Deny / Always and the full command. Unanswered prompts go back to the terminal after a timeout (default 60s), as does any prompt for a herdr pane you are looking at. Settings → Agents → Approvals, then update the Claude hooks.
 - **Activity**: a 26-week heatmap and streak, today's prompts, tool calls, sessions and top projects, and a cost estimate at Anthropic and OpenAI API list prices (plans are not billed per token; models without a known price are counted separately). Daily totals, split by project, model and agent, are kept in `daily-history.json`, so the heatmap and reports outlive the agents' own 30-day log cleanup.
 - **Reports**: the last notch page compares the last 7 days with the 7 before and lists top projects and models. Every Monday from 09:00 an alert sums up last week. The Reports window charts daily cost or tokens by project, model or agent over 7 days to 26 weeks, with a sortable table and the change against the period before.
-- **Accounts**: every agent home is its own account (`~/.claude`, `~/.claude_multi/*`, `~/.codex*`, `~/.gemini`, Cursor). Auto-detected on first launch; edit in Settings → Accounts. When one account reaches 85% of a window and a home of the same agent has at least 30 points more room, the account page and the limit alert suggest switching, with the command (`CLAUDE_CONFIG_DIR=… claude`, `CODEX_HOME=… codex`) to copy or open in Ghostty, iTerm2 or Terminal.
+- **Accounts**: every agent home is its own account (`~/.claude`, `~/.claude_multi/*`, `~/.codex*`, `~/.gemini`, Cursor). Auto-detected on first launch; edit in Settings → Accounts. Copilot (your GitHub CLI login) and OpenRouter (a key you paste) are added there too, and never auto-detected. When one account reaches 85% of a window and a home of the same agent has at least 30 points more room, the account page and the limit alert suggest switching, with the command (`CLAUDE_CONFIG_DIR=… claude`, `CODEX_HOME=… codex`) to copy or open in Ghostty, iTerm2 or Terminal.
 - **Proxy**: global System / None / HTTP / HTTPS / SOCKS5 with optional auth (password in Keychain), plus per-provider override and a connection test.
 
 ## Build from source
@@ -75,11 +79,13 @@ make dump       # print every account's limits and token stats in the terminal
 | Provider | Credential | Endpoint |
 |---|---|---|
 | Claude | Keychain `Claude Code-credentials[-<sha256(home)[:8]>]` or `<home>/.credentials.json` | `GET api.anthropic.com/api/oauth/usage` |
-| Codex | `<home>/auth.json` | `GET chatgpt.com/backend-api/wham/usage` |
+| Codex | `<home>/auth.json` | `GET chatgpt.com/backend-api/wham/usage`, and `/wham/rate-limit-reset-credits` at most hourly when resets are available |
 | Cursor | `state.vscdb` → `cursorAuth/accessToken` | `GET cursor.com/api/usage-summary` |
 | Gemini CLI | `<home>/oauth_creds.json` | `POST cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` and `:retrieveUserQuota` |
+| Copilot | `gh auth token` | `GET api.github.com/copilot_internal/user` |
+| OpenRouter | Key in the Keychain | `GET openrouter.ai/api/v1/key` and `/credits` |
 
-Tokens are never refreshed or rewritten and are only sent to their own provider. These endpoints are undocumented and may change. Gemini's Google token lasts about an hour and only the CLI refreshes it, so between Gemini sessions the notch shows the last numbers with "Run `gemini` to refresh it".
+Tokens are never refreshed or rewritten and are only sent to their own provider. These endpoints are undocumented and may change, except OpenRouter's. Copilot uses your GitHub CLI token, which usually reaches much more than Copilot (`repo`, `workflow`): it is read on each fetch, kept in memory for that request and sent only to `api.github.com`. Only a management key can read OpenRouter credits; a standard key shows just its own limit. Gemini's Google token lasts about an hour and only the CLI refreshes it, so between Gemini sessions the notch shows the last numbers with "Run `gemini` to refresh it".
 
 ### When the API is unavailable
 
@@ -93,10 +99,10 @@ Token statistics come from `<home>/projects/**/*.jsonl` (Claude), `<home>/sessio
 
 ## Privacy
 
-- Credentials are read, never refreshed or rewritten, and only sent to the provider they belong to.
+- Credentials are read, never refreshed or rewritten, and only sent to the provider they belong to. Nothing Agentilo calls spends a limit reset or changes your account.
 - No analytics, no telemetry, no account. The only network calls are the usage endpoints above (through your proxy, if set) and the daily update check against this repository's releases.
 - The local API binds to `127.0.0.1` only. See [SECURITY.md](SECURITY.md) to report a problem.
 
 ## License
 
-[MIT](LICENSE). Provider logos are from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and are trademarks of their owners. Agentilo is not affiliated with Anthropic, OpenAI or Anysphere.
+[MIT](LICENSE). Provider logos are from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and are trademarks of their owners. Agentilo is not affiliated with Anthropic, OpenAI, Anysphere, GitHub or OpenRouter.

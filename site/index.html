@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Agentilo · Plan limits in the notch</title>
-  <meta name="description" content="Agentilo is a free, open-source macOS notch app that shows Claude Code, Codex, Gemini CLI and Cursor plan limits, paces them against the clock, and lets you watch and approve your agents.">
+  <meta name="description" content="Agentilo is a free, open-source macOS notch app that shows Claude Code, Codex, Gemini CLI, Cursor, Copilot and OpenRouter limits, paces them against the clock, and lets you watch and approve your agents.">
   <meta name="theme-color" content="#050507">
   <link rel="canonical" href="https://farvisun.github.io/agentilo/">
   <link rel="icon" type="image/png" href="assets/favicon.png">
@@ -12,7 +12,7 @@
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="Agentilo · Plan limits in the notch">
-  <meta property="og:description" content="Claude Code, Codex, Gemini CLI and Cursor limits, paced against the clock, beside your MacBook notch. Free and open source.">
+  <meta property="og:description" content="Claude Code, Codex, Gemini CLI, Cursor, Copilot and OpenRouter limits, paced against the clock, beside your MacBook notch. Free and open source.">
   <meta property="og:url" content="https://farvisun.github.io/agentilo/">
   <meta property="og:image" content="https://farvisun.github.io/agentilo/assets/og.jpg">
   <meta property="og:image:width" content="1200">
@@ -265,7 +265,7 @@
         <p class="ch-num">01 · Limits</p>
         <h2>Every plan window, <span class="serif">one glance up.</span></h2>
         <p>Collapsed, the notch shows a ring and a number for the account closest to trouble. Hover and it opens into session and weekly meters, reset times and the session you are in right now. Scroll to page through accounts.</p>
-        <ul class="facts"><li>Every agent home is its own account: <code>~/.claude</code>, <code>~/.claude_multi/*</code>, <code>~/.codex*</code>, <code>~/.gemini</code>, Cursor</li><li>Found automatically on first launch</li></ul>
+        <ul class="facts"><li>Every agent home is its own account: <code>~/.claude</code>, <code>~/.claude_multi/*</code>, <code>~/.codex*</code>, <code>~/.gemini</code>, Cursor. Copilot and OpenRouter are added by hand</li><li>Found automatically on first launch</li></ul>
       </article>
 
       <article class="chapter" data-scene="pace">
@@ -375,7 +375,7 @@
         <h2>Your tokens <span class="serif">stay home.</span></h2>
       </div>
       <div class="cards">
-        <article class="card reveal"><span class="card-num">01</span><h3>Read-only credentials</h3><p>Uses the sign-ins Claude Code, Codex, Gemini CLI and Cursor already store. Never refreshes or rewrites them, and sends each only to its own provider.</p></article>
+        <article class="card reveal"><span class="card-num">01</span><h3>Read-only credentials</h3><p>Uses the sign-ins Claude Code, Codex, Gemini CLI, Cursor and the GitHub CLI already store, plus an OpenRouter key if you add one. Never refreshes or rewrites them, and sends each only to its own provider.</p></article>
         <article class="card reveal"><span class="card-num">02</span><h3>No telemetry</h3><p>No account, no analytics. The only requests are the four agents' usage endpoints, through your proxy if you set one, and a daily update check.</p></article>
         <article class="card reveal"><span class="card-num">03</span><h3>Loopback only</h3><p>The local API listens on 127.0.0.1, refuses browser pages, and needs a per-install token for anything that changes state.</p></article>
         <article class="card reveal"><span class="card-num">04</span><h3>Works offline</h3><p>Offline or rate limited? Codex limits come from its own logs; Claude limits are estimated from tokens logged since the last check.</p></article>
