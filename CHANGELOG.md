@@ -4,6 +4,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
 ### Added
 
 - The collapsed notch can rotate through every tracked account: choose "All accounts, rotating" in Settings → General, then the animation (horizontal slide, vertical slide, fade, scale and fade), how long each account shows and the animation speed. In click-to-expand mode a two-finger swipe over the notch moves it by hand.
@@ -66,7 +68,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 - The first release: Claude Code, Codex and Cursor plan limits beside the notch, paced, with alerts, live agent sessions from herdr and hooks, permission prompts answered from the notch, an activity page, a loopback API and the `agentilo` command.
 
-[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/farvisun/agentilo/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/farvisun/agentilo/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/farvisun/agentilo/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/farvisun/agentilo/compare/v0.4.0...v0.5.0
