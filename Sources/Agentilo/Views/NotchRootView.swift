@@ -68,7 +68,9 @@ struct PillView: View {
         let items = state.pillItems
         let progress = state.settings.pillShowsAgents ? WorkProgress(state.agents) : nil
         HStack(spacing: 0) {
-            if items.count >= 2 {
+            if state.settings.pillMode == .rotate, let item = items.first {
+                RotatingPill(state: state, current: PillEntry(account: item.account, window: item.window), progress: progress)
+            } else if items.count >= 2 {
                 // Nudge inward: the shape's concave top corner eats into the outer edge.
                 CompactItem(state: state, account: items[0].account, window: items[0].window, progress: progress)
                     .padding(.leading, 6)
@@ -121,6 +123,118 @@ struct PillView: View {
                     .padding(.top, 4)
                     .help("Alerts are quiet")
             }
+        }
+    }
+}
+
+/// Every tracked account in turn: which account on the left wing, its limit on the right.
+/// A working agent keeps its spinner in place while the accounts move past it.
+private struct RotatingPill: View {
+    var state: AppState
+    var current: PillEntry
+    var progress: WorkProgress?
+
+    var body: some View {
+        let l = state.layout
+        HStack(spacing: 3) {
+            if let progress { AgentProgressView(progress: progress, showsTime: false) }
+            carousel(travel: NotchGeometry.wing) { entry in
+                HStack(spacing: 3) {
+                    if progress == nil { ProviderIcon(provider: entry.account.provider, size: 13) }
+                    Text(entry.account.shortTag)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Palette.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+        }
+        .padding(.leading, 6)
+        .frame(width: NotchGeometry.wing)
+
+        Spacer().frame(width: l.notchWidth)
+
+        carousel(travel: NotchGeometry.wing) { entry in
+            HStack(spacing: 3) {
+                Text(entry.window.shortTag)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Palette.tertiary)
+                UsageGauge(state: state, account: entry.account, window: entry.window, ringSize: 13)
+            }
+        }
+        .padding(.trailing, 6)
+        .frame(width: NotchGeometry.wing)
+    }
+
+    private func carousel<Item: View>(travel: CGFloat, @ViewBuilder item: @escaping (PillEntry) -> Item) -> some View {
+        PillCarousel(
+            swap: state.pillSwap, current: current,
+            animation: state.settings.pillRotateAnimation,
+            speed: min(1.5, max(0.1, state.settings.pillRotateSpeed)),
+            travel: CGSize(width: travel, height: state.layout.notchHeight),
+            item: item
+        )
+    }
+}
+
+/// Draws the current entry over the one it replaced, moved by the last swap. Both layers stay
+/// in place at rest (the old one out of sight) so each swap restarts their keyframes.
+private struct PillCarousel<Item: View>: View {
+    var swap: PillSwap
+    var current: PillEntry
+    var animation: PillRotateAnimation
+    var speed: TimeInterval
+    var travel: CGSize
+    @ViewBuilder var item: (PillEntry) -> Item
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The "move" easing: quick start, soft landing.
+    private var curve: UnitCurve {
+        .bezier(startControlPoint: UnitPoint(x: 0.25, y: 1), endControlPoint: UnitPoint(x: 0.5, y: 1))
+    }
+
+    var body: some View {
+        ZStack {
+            layer { t in -t * swap.direction } content: {
+                // Never empty: the layer has to exist before the first swap to animate it.
+                if let from = swap.from { item(from) } else { Color.clear }
+            }
+            layer { t in (1 - t) * swap.direction } content: {
+                item(current)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+
+    private func layer<Content: View>(
+        phase: @escaping (CGFloat) -> CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let shown = reduceMotion ? PillRotateAnimation.fade : animation
+        return content().keyframeAnimator(initialValue: CGFloat(1), trigger: swap.count) { [travel] view, t in
+            view.modifier(PillSwapEffect(animation: shown, phase: phase(t), travel: travel))
+        } keyframes: { _ in
+            KeyframeTrack {
+                MoveKeyframe(CGFloat(0))
+                LinearKeyframe(CGFloat(1), duration: speed, timingCurve: curve)
+            }
+        }
+    }
+}
+
+/// `phase` is 0 at rest and ±1 fully out of sight, on the side the entry enters or leaves by.
+private struct PillSwapEffect: ViewModifier {
+    var animation: PillRotateAnimation
+    var phase: CGFloat
+    var travel: CGSize
+
+    func body(content: Content) -> some View {
+        switch animation {
+        case .slideHorizontal: content.offset(x: phase * travel.width)
+        case .slideVertical: content.offset(y: phase * travel.height)
+        case .fade: content.opacity(1 - abs(phase))
+        case .scale: content.scaleEffect(1 - abs(phase) * 0.2).opacity(1 - abs(phase))
         }
     }
 }

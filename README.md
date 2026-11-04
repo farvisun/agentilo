@@ -46,7 +46,7 @@ Agentilo checks for a new release once a day and asks before installing it (Sett
 
 ## Features
 
-- **Collapsed**: ring + percentage of the most critical account, colored by pace. While an agent works, the left wing shows a spinner and the turn time (with a count when several work at once).
+- **Collapsed**: ring + percentage of the most critical account, colored by pace. While an agent works, the left wing shows a spinner and the turn time (with a count when several work at once). Or rotate through every tracked account, with the animation, timing and speed set in Settings → General (in click-to-expand mode, two-finger swipe to move by hand).
 - **Hover**: notch expands with session/weekly meters, reset times, pace ("On track", "Ahead of pace", "Runs out 7:24 PM"), live session row. Scroll or use arrows to page through accounts and the token stats page.
 - **Alerts**: drop down out of the notch at 75%, 90% and 100% of a window (with the projected run-out time) and when a window resets. Optional sound. Settings → Alerts.
 - **Quiet mode**: quiet hours on a schedule (wrapping past midnight, per weekday), snooze from the moon menu in the expanded notch, and `agentilo quiet on|off|45m|2h|status` for scripts. Approvals and limit-reached alerts still come through unless you turn that off. To follow a macOS Focus, add a Shortcuts automation (When Focus turns on → Run Shell Script `agentilo quiet on`, and `off` when it turns off).

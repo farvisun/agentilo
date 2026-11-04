@@ -4,6 +4,10 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- The collapsed notch can rotate through every tracked account: choose "All accounts, rotating" in Settings → General, then the animation (horizontal slide, vertical slide, fade, scale and fade), how long each account shows and the animation speed. In click-to-expand mode a two-finger swipe over the notch moves it by hand.
+
 ### Fixed
 
 - "Finished" alerts now appear while the terminal is in the background. herdr reports such a turn as `done`, which Agentilo ignored until the pane was seen, so the session also stayed "working" and kept the Mac awake.

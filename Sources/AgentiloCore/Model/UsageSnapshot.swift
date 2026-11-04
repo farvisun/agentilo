@@ -9,6 +9,18 @@ public enum WindowKind: String, Codable, Sendable {
 
 /// A single limit window as reported by a provider (5-hour session, weekly, billing cycle...).
 public struct UsageWindow: Codable, Hashable, Sendable, Identifiable {
+    /// Fits next to the percentage in the pill: "5h", "W", "M".
+    public var shortTag: String {
+        switch kind {
+        case .session:
+            guard let windowLength, windowLength >= 3600 else { return "S" }
+            return "\(Int((windowLength / 3600).rounded()))h"
+        case .weekly: return "W"
+        case .billing: return "M"
+        case .other: return String(title.prefix(1)).uppercased()
+        }
+    }
+
     public var id: String
     public var kind: WindowKind
     public var title: String

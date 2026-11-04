@@ -57,6 +57,11 @@ public struct Account: Codable, Identifiable, Hashable, Sendable {
     }
 
     public var homeURL: URL { URL(fileURLWithPath: Paths.expand(homePath)) }
+
+    /// Fits a pill wing: the start of the label, without an email's domain.
+    public var shortTag: String {
+        String((label.split(separator: "@").first.map(String.init) ?? label).prefix(6))
+    }
 }
 
 public enum Paths {

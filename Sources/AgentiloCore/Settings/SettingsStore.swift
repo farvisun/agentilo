@@ -21,6 +21,8 @@ public enum PillMode: String, Codable, CaseIterable, Sendable, Identifiable {
     case perProvider
     /// One chosen account.
     case pinned
+    /// Every tracked account in turn.
+    case rotate
 
     public var id: String { rawValue }
 
@@ -29,6 +31,26 @@ public enum PillMode: String, Codable, CaseIterable, Sendable, Identifiable {
         case .mostCritical: "Most critical account"
         case .perProvider: "One per provider (side by side)"
         case .pinned: "Pinned account"
+        case .rotate: "All accounts, rotating"
+        }
+    }
+}
+
+/// How the rotating pill moves from one account to the next.
+public enum PillRotateAnimation: String, Codable, CaseIterable, Sendable, Identifiable {
+    case slideHorizontal
+    case slideVertical
+    case fade
+    case scale
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .slideHorizontal: "Horizontal slide"
+        case .slideVertical: "Vertical slide"
+        case .fade: "Fade"
+        case .scale: "Scale and fade"
         }
     }
 }
@@ -115,6 +137,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var expandTrigger = ExpandTrigger.hover
     public var pillWindow = PillWindow.mostCritical
     public var pillStyle = PillStyle.both
+    /// Seconds each account stays in the rotating pill.
+    public var pillRotateInterval: Double = 5
+    public var pillRotateAnimation = PillRotateAnimation.slideHorizontal
+    /// Seconds the move to the next account takes.
+    public var pillRotateSpeed: Double = 0.35
     public var alertsEnabled = true
     /// Usage percentages that drop an alert out of the notch; 100 means "limit reached".
     public var alertThresholds = [75, 90, 100]
@@ -176,6 +203,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         expandTrigger = try c.decodeIfPresent(ExpandTrigger.self, forKey: .expandTrigger) ?? d.expandTrigger
         pillWindow = try c.decodeIfPresent(PillWindow.self, forKey: .pillWindow) ?? d.pillWindow
         pillStyle = try c.decodeIfPresent(PillStyle.self, forKey: .pillStyle) ?? d.pillStyle
+        pillRotateInterval = try c.decodeIfPresent(Double.self, forKey: .pillRotateInterval) ?? d.pillRotateInterval
+        pillRotateAnimation = (try? c.decodeIfPresent(PillRotateAnimation.self, forKey: .pillRotateAnimation)) ?? d.pillRotateAnimation
+        pillRotateSpeed = try c.decodeIfPresent(Double.self, forKey: .pillRotateSpeed) ?? d.pillRotateSpeed
         alertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .alertsEnabled) ?? d.alertsEnabled
         alertThresholds = try c.decodeIfPresent([Int].self, forKey: .alertThresholds) ?? d.alertThresholds
         resetAlerts = try c.decodeIfPresent(Bool.self, forKey: .resetAlerts) ?? d.resetAlerts

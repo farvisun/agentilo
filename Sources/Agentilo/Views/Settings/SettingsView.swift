@@ -57,6 +57,31 @@ struct GeneralTab: View {
                     }
                 }
             }
+            if state.settings.pillMode == .rotate {
+                Picker("Rotation animation", selection: $state.settings.pillRotateAnimation) {
+                    ForEach(PillRotateAnimation.allCases) { Text($0.displayName).tag($0) }
+                }
+                LabeledContent("Show each account for") {
+                    HStack {
+                        Slider(value: $state.settings.pillRotateInterval, in: 2...60, step: 1)
+                        Text("\(Int(state.settings.pillRotateInterval)) s")
+                            .monospacedDigit()
+                            .frame(width: 42, alignment: .trailing)
+                    }
+                }
+                LabeledContent("Animation speed") {
+                    HStack {
+                        Slider(value: $state.settings.pillRotateSpeed, in: 0.1...1.5, step: 0.05)
+                        Text(String(format: "%.2f s", state.settings.pillRotateSpeed))
+                            .monospacedDigit()
+                            .frame(width: 42, alignment: .trailing)
+                    }
+                }
+                if state.settings.expandTrigger == .click {
+                    Text("Swipe two fingers over the collapsed notch to move by hand.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Picker("Collapsed limit", selection: $state.settings.pillWindow) {
                 ForEach(PillWindow.allCases) { Text($0.displayName).tag($0) }
             }

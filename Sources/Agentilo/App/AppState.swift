@@ -35,6 +35,9 @@ final class AppState {
                 refreshStats()
             }
             if settings.refreshInterval != oldValue.refreshInterval { startLoop() }
+            if settings.pillMode != oldValue.pillMode || settings.pillRotateInterval != oldValue.pillRotateInterval {
+                startPillRotation()
+            }
             if settings.apiEnabled != oldValue.apiEnabled || settings.apiPort != oldValue.apiPort { startServer() }
             if settings.keepAwake != oldValue.keepAwake || settings.keepAwakeLidClosed != oldValue.keepAwakeLidClosed
                 || settings.keepAwakeMinBattery != oldValue.keepAwakeMinBattery {
@@ -51,6 +54,10 @@ final class AppState {
     var expanded = false
     var page = 0
     var now = Date()
+    /// The account the rotating pill is on, as an index into `pillEntries`.
+    var pillIndex = 0
+    var pillSwap = PillSwap()
+    @ObservationIgnored var pillLoop: Task<Void, Never>?
     let alerts = AlertCenter()
     var agents = AgentSessionStore()
     /// Permission prompts waiting for an answer in the notch, oldest first.
@@ -158,6 +165,11 @@ final class AppState {
         switch settings.pillMode {
         case .mostCritical:
             return critical.map { [$0] } ?? []
+        case .rotate:
+            let entries = pillEntries
+            guard !entries.isEmpty else { return [] }
+            let e = entries[pillIndex % entries.count]
+            return [(e.account, e.window)]
         case .pinned:
             if let id = settings.pinnedAccount, let acct = limitAccounts.first(where: { $0.id == id }),
                let w = status(acct).snapshot?.window(for: settings.pillWindow, now: now) {
@@ -183,6 +195,7 @@ final class AppState {
         startLoop()
         startServer()
         startAgents()
+        startPillRotation()
         refreshStats()
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -493,4 +506,56 @@ final class AppState {
         guard pageCount > 0 else { return }
         page = (page + delta + pageCount) % pageCount
     }
+
+    // MARK: Rotating pill
+
+    /// Every tracked account with its collapsed limit, in Settings order.
+    var pillEntries: [PillEntry] {
+        limitAccounts.compactMap { acct in
+            status(acct).snapshot?.window(for: settings.pillWindow, now: now).map { PillEntry(account: acct, window: $0) }
+        }
+    }
+
+    /// Moves on every interval while the collapsed pill is what's on screen.
+    func startPillRotation() {
+        pillLoop?.cancel()
+        guard settings.pillMode == .rotate else { return }
+        let interval = min(60, max(2, settings.pillRotateInterval))
+        pillLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard let self, !Task.isCancelled else { return }
+                if self.notchMode == .collapsed, !self.notchHidden { self.movePill(1) }
+            }
+        }
+    }
+
+    func movePill(_ delta: Int) {
+        let entries = pillEntries
+        guard entries.count > 1 else { return }
+        let from = entries[pillIndex % entries.count]
+        pillIndex = (pillIndex % entries.count + delta + entries.count) % entries.count
+        pillSwap = PillSwap(from: from, direction: CGFloat(delta), count: pillSwap.count + 1)
+    }
+
+    /// A trackpad swipe over the pill; the next timed move waits a full interval again.
+    func swipePill(_ delta: Int) {
+        movePill(delta)
+        startPillRotation()
+    }
+}
+
+/// One account in the rotating pill.
+struct PillEntry: Equatable {
+    var account: Account
+    var window: UsageWindow
+}
+
+/// The last move of the rotating pill. Held here so the outgoing entry, the new one and the
+/// animation's trigger all change in the same view update.
+struct PillSwap: Equatable {
+    var from: PillEntry?
+    /// 1 moves on to the next account, -1 back to the previous one.
+    var direction: CGFloat = 1
+    var count = 0
 }

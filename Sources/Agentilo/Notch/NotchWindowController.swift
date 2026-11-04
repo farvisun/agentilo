@@ -205,7 +205,9 @@ final class NotchWindowController {
     }
 
     private func handleScroll(_ event: NSEvent) {
-        guard state.expanded else { return }
+        // The collapsed panel only gets scrolls in click mode, while the cursor is over the pill.
+        let rotates = state.notchMode == .collapsed && state.settings.pillMode == .rotate
+        guard state.expanded || rotates else { return }
         let delta = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) ? -event.scrollingDeltaX : -event.scrollingDeltaY
         if event.phase == .began {
             scrollAccumulator = 0
@@ -216,7 +218,12 @@ final class NotchWindowController {
         scrollAccumulator += delta
         let threshold: CGFloat = event.hasPreciseScrollingDeltas ? 40 : 1
         if abs(scrollAccumulator) >= threshold {
-            withAnimation(.snappy) { state.movePage(scrollAccumulator > 0 ? 1 : -1) }
+            let step = scrollAccumulator > 0 ? 1 : -1
+            if state.expanded {
+                withAnimation(.snappy) { state.movePage(step) }
+            } else {
+                state.swipePill(step)
+            }
             scrollAccumulator = 0
             scrollConsumed = event.hasPreciseScrollingDeltas
         }

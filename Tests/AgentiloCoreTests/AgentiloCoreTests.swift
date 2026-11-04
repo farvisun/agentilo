@@ -743,6 +743,30 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(HerdrSource.parse(Data(json.utf8))?.first?.status, .done)
     }
 
+    func testPillTags() {
+        func acct(_ label: String) -> Account { Account(provider: .claude, homePath: "~/.claude", label: label) }
+        XCTAssertEqual(acct("farvidev@gmail.com").shortTag, "farvid")
+        XCTAssertEqual(acct("info@varahome.ai").shortTag, "info")
+        XCTAssertEqual(acct("Work").shortTag, "Work")
+
+        func window(_ kind: WindowKind, length: TimeInterval? = nil, title: String = "Credits") -> UsageWindow {
+            UsageWindow(id: "w", kind: kind, title: title, usedPercent: 1, resetsAt: nil, windowLength: length)
+        }
+        XCTAssertEqual(window(.session, length: 5 * 3600).shortTag, "5h")
+        XCTAssertEqual(window(.session).shortTag, "S")
+        XCTAssertEqual(window(.weekly).shortTag, "W")
+        XCTAssertEqual(window(.billing).shortTag, "M")
+        XCTAssertEqual(window(.other).shortTag, "C")
+    }
+
+    func testRotationSettingsDefaultWhenMissing() throws {
+        let s = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"pillMode":"rotate"}"#.utf8))
+        XCTAssertEqual(s.pillMode, .rotate)
+        XCTAssertEqual(s.pillRotateInterval, 5)
+        XCTAssertEqual(s.pillRotateAnimation, .slideHorizontal)
+        XCTAssertEqual(s.pillRotateSpeed, 0.35)
+    }
+
     func testParsesHerdrList() throws {
         let agents = try XCTUnwrap(HerdrSource.parse(try fixture("herdr_agents.json")))
         XCTAssertEqual(agents.count, 2)
