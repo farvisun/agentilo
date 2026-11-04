@@ -4,6 +4,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-04
+
 ### Added
 
 - A global shortcut opens and closes the notch from anywhere (Settings → General, none by default). Opened this way it stays open until the shortcut, Esc or a click outside.
@@ -83,7 +85,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 - The first release: Claude Code, Codex and Cursor plan limits beside the notch, paced, with alerts, live agent sessions from herdr and hooks, permission prompts answered from the notch, an activity page, a loopback API and the `agentilo` command.
 
-[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/farvisun/agentilo/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/farvisun/agentilo/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/farvisun/agentilo/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/farvisun/agentilo/compare/v0.5.0...v0.6.0
