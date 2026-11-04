@@ -4,6 +4,12 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex subagent and forked sessions no longer count the parent's history they replay at the start of their log, in tokens, cost, prompts and tool calls. Replayed limits no longer replace newer ones in the offline fallback.
+- Cost estimates: one-hour Claude cache writes are priced at 2x input instead of 1.25x, fast mode at twice the rate, and Haiku 5.5 prompts over 100,000 tokens at the higher rate. Sonnet 5.5 cache hits are $0.10. `gpt-6.1-terra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-5.3-codex` and Claude Mythos 5 now have prices. The last 30 days are recalculated on first launch; older days stay as recorded.
+- A home whose log folder is a symlink to another home's now shows its token statistics, counted once when both are enabled.
+
 ## [0.7.0] - 2026-11-04
 
 ### Added

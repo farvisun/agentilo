@@ -185,8 +185,11 @@ public enum ClaudeLogParser {
             let write = J.double(usage["cache_creation_input_tokens"]) ?? 0
             let read = J.double(usage["cache_read_input_tokens"]) ?? 0
             let total = Int(input + output + write + read)
+            // `cache_creation` splits the writes by lifetime; older logs have only the sum.
+            let write1h = min(write, J.double(J.dict(usage["cache_creation"])?["ephemeral_1h_input_tokens"]) ?? 0)
             agg.add(total, weighted: weight(model: model, input: input, output: output, cacheWrite: write, cacheRead: read),
-                    cost: Pricing.cost(model: model, input: input, output: output, cacheWrite: write, cacheRead: read),
+                    cost: Pricing.cost(model: model, input: input, output: output, cacheWrite: write - write1h, cacheRead: read,
+                                       cacheWrite1h: write1h, fast: J.string(usage["speed"]) == "fast"),
                     model: model, at: date, key: key)
         }
     }

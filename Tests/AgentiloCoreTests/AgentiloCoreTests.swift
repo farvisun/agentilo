@@ -979,10 +979,47 @@ final class ActivityStatsTests: XCTestCase {
         XCTAssertEqual(Pricing.rate(for: "claude-opus-5-20260101")?.input, 5)
         XCTAssertEqual(Pricing.rate(for: "claude-sonnet-4-6")?.output, 15)
         XCTAssertEqual(Pricing.rate(for: "gpt-6.1-sol")?.cacheRead, 0.10)
-        XCTAssertNil(Pricing.rate(for: "gpt-6-luna"))
+        XCTAssertEqual(Pricing.rate(for: "gpt-6-luna")?.input, 0.10)
+        XCTAssertEqual(Pricing.rate(for: "gpt-6.1-terra")?.cacheRead, 0.05)
+        XCTAssertEqual(Pricing.rate(for: "claude-sonnet-5-5")?.cacheRead, 0.10)
+        XCTAssertNil(Pricing.rate(for: "glm-5.3-flash"))
         // 1M input + 1M output + 1M cache write + 1M cache read on Opus 5.5: 4 + 20 + 5 + 0.2.
         let c = try XCTUnwrap(Pricing.cost(model: "claude-opus-5-5", input: 1e6, output: 1e6, cacheWrite: 1e6, cacheRead: 1e6))
         XCTAssertEqual(c, 29.2, accuracy: 1e-9)
+    }
+
+    func testOneHourCacheWritesCostTwiceInput() throws {
+        let c = try XCTUnwrap(Pricing.cost(model: "claude-opus-5-5", input: 0, output: 0, cacheWrite: 1e6, cacheRead: 0, cacheWrite1h: 1e6))
+        XCTAssertEqual(c, 5 + 8, accuracy: 1e-9)
+    }
+
+    func testFastModeDoublesEveryKind() throws {
+        let c = try XCTUnwrap(Pricing.cost(model: "claude-opus-5-5", input: 1e6, output: 1e6, cacheWrite: 1e6, cacheRead: 1e6, fast: true))
+        XCTAssertEqual(c, 58.4, accuracy: 1e-9)
+    }
+
+    func testHaikuLongPromptsCostFiveTimesAsMuch() throws {
+        func cost(read: Double) throws -> Double {
+            try XCTUnwrap(Pricing.cost(model: "claude-haiku-5-5", input: 1_000, output: 1_000, cacheWrite: 0, cacheRead: read))
+        }
+        XCTAssertEqual(try cost(read: 99_000), (1_000 * 0.10 + 1_000 * 0.50 + 99_000 * 0.01) / 1e6, accuracy: 1e-12)
+        XCTAssertEqual(try cost(read: 99_001), (1_000 * 0.50 + 1_000 * 2.50 + 99_001 * 0.05) / 1e6, accuracy: 1e-12)
+    }
+
+    func testClaudeLogSplitsCacheWritesByLifetime() throws {
+        let iso = "2026-05-12T08:00:00.000Z"
+        func line(_ id: String, _ usage: String) -> String {
+            #"{"timestamp":"\#(iso)","message":{"id":"\#(id)","model":"claude-opus-5-5","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,\#(usage)}}}"#
+        }
+        let log = [
+            line("split", #""cache_creation_input_tokens":1000000,"cache_creation":{"ephemeral_5m_input_tokens":250000,"ephemeral_1h_input_tokens":750000}"#),
+            line("old", #""cache_creation_input_tokens":1000000"#),
+            line("fast", #""cache_creation_input_tokens":1000000,"speed":"fast""#),
+        ].joined(separator: "\n") + "\n"
+        let costs = ClaudeLogParser.parse(Data(log.utf8)).entries.map { $0.c ?? -1 }
+        XCTAssertEqual(costs[0], 0.25 * 5 + 0.75 * 8, accuracy: 1e-9)
+        XCTAssertEqual(costs[1], 5, accuracy: 1e-9)
+        XCTAssertEqual(costs[2], 10, accuracy: 1e-9)
     }
 
     func testClaudeCountsPromptsAndSplitToolUses() {
