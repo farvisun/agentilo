@@ -46,6 +46,13 @@ struct GeneralTab: View {
                 ForEach(ExpandTrigger.allCases) { Text($0.displayName).tag($0) }
             }
             .pickerStyle(.segmented)
+            LabeledContent("Open notch from anywhere") {
+                ShortcutRecorder(hotKey: $state.settings.toggleHotKey)
+            }
+            if state.hotKeyRefused {
+                Text("macOS refused this shortcut. Another app may be using it.")
+                    .font(.caption).foregroundStyle(.red)
+            }
             Picker("Collapsed notch shows", selection: $state.settings.pillMode) {
                 ForEach(PillMode.allCases) { Text($0.displayName).tag($0) }
             }
@@ -91,6 +98,10 @@ struct GeneralTab: View {
             }
             .pickerStyle(.segmented)
             Toggle("Show local token statistics", isOn: $state.settings.showTokenStats)
+            Toggle(isOn: $state.settings.hideWhileCaptured) {
+                Text("Hide while the screen is shared or recorded")
+                Text("Hides the notch and holds alerts, like for a full-screen app. An app that captures the screen all the time keeps it hidden.")
+            }
             Toggle("Launch at login", isOn: Binding(
                 get: { state.settings.launchAtLogin },
                 set: { setLaunchAtLogin($0) }

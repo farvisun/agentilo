@@ -35,6 +35,7 @@ final class AppState {
                 refreshStats()
             }
             if settings.refreshInterval != oldValue.refreshInterval { startLoop() }
+            if settings.toggleHotKey != oldValue.toggleHotKey { onHotKeyChange?() }
             if settings.pillMode != oldValue.pillMode || settings.pillRotateInterval != oldValue.pillRotateInterval {
                 startPillRotation()
             }
@@ -50,6 +51,10 @@ final class AppState {
     var stats = TokenStats()
     /// Opens the Reports window; set by the app delegate.
     @ObservationIgnored var openReports: () -> Void = {}
+    /// The notch controller registers the shortcut again when it changes.
+    @ObservationIgnored var onHotKeyChange: (() -> Void)?
+    /// macOS would not register the chosen shortcut.
+    var hotKeyRefused = false
     var layout = NotchLayout()
     var expanded = false
     var page = 0

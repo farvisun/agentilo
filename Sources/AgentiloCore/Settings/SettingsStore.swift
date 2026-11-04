@@ -122,6 +122,20 @@ public enum ExpandTrigger: String, Codable, CaseIterable, Sendable, Identifiable
     public var displayName: String { self == .hover ? "Hover" : "Click" }
 }
 
+/// A global key combination, in Carbon's key and modifier codes.
+public struct HotKey: Codable, Equatable, Sendable {
+    public var keyCode: UInt32
+    public var modifiers: UInt32
+    /// What the settings show, such as "⌃⌥A".
+    public var display: String
+
+    public init(keyCode: UInt32, modifiers: UInt32, display: String) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+        self.display = display
+    }
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
     public var accounts: [Account] = []
     /// Seconds between limit refreshes.
@@ -135,6 +149,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var pillMode = PillMode.mostCritical
     public var pinnedAccount: UUID?
     public var expandTrigger = ExpandTrigger.hover
+    /// Opens and closes the notch from anywhere.
+    public var toggleHotKey: HotKey?
+    /// Step aside, like for a full-screen app, while the screen is shared or recorded.
+    public var hideWhileCaptured = false
     public var pillWindow = PillWindow.mostCritical
     public var pillStyle = PillStyle.both
     /// Seconds each account stays in the rotating pill.
@@ -201,6 +219,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         pillMode = try c.decodeIfPresent(PillMode.self, forKey: .pillMode) ?? d.pillMode
         pinnedAccount = try c.decodeIfPresent(UUID.self, forKey: .pinnedAccount)
         expandTrigger = try c.decodeIfPresent(ExpandTrigger.self, forKey: .expandTrigger) ?? d.expandTrigger
+        toggleHotKey = try c.decodeIfPresent(HotKey.self, forKey: .toggleHotKey)
+        hideWhileCaptured = try c.decodeIfPresent(Bool.self, forKey: .hideWhileCaptured) ?? d.hideWhileCaptured
         pillWindow = try c.decodeIfPresent(PillWindow.self, forKey: .pillWindow) ?? d.pillWindow
         pillStyle = try c.decodeIfPresent(PillStyle.self, forKey: .pillStyle) ?? d.pillStyle
         pillRotateInterval = try c.decodeIfPresent(Double.self, forKey: .pillRotateInterval) ?? d.pillRotateInterval

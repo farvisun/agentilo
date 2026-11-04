@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 final class NotchPanel: NSPanel {
@@ -24,7 +25,25 @@ final class NotchWindowController {
     private var screen: NSScreen?
     private var pollTimer: Timer?
     private var fullscreenTimer: Timer?
-    private var hiddenForFullscreen = false
+    /// Out of the way of a full-screen app or a screen capture.
+    private var steppedAside = false
+    private var toggleHotKey: GlobalHotKey?
+    private var escapeHotKey: GlobalHotKey?
+    /// Opened with the shortcut: stays open with the cursor elsewhere, until a click outside or Esc.
+    private var openedByShortcut = false {
+        didSet {
+            guard openedByShortcut != oldValue else { return }
+            escapeHotKey?.unregister()
+            escapeHotKey = nil
+            if openedByShortcut {
+                escapeHotKey = GlobalHotKey(keyCode: UInt32(kVK_Escape), modifiers: 0) { [weak self] in
+                    self?.setExpanded(false)
+                }
+            }
+        }
+    }
+    /// Closed with the shortcut under the cursor: hover waits until the cursor has left.
+    private var hoverSuppressed = false
     private var scrollMonitor: Any?
     private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
@@ -64,17 +83,19 @@ final class NotchWindowController {
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
             workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateFullscreen() }
+                MainActor.assumeIsolated { self?.updateVisibility() }
             }
         }
     }
 
     func show() {
         reposition()
-        if !hiddenForFullscreen { panel.orderFrontRegardless() }
+        if !steppedAside { panel.orderFrontRegardless() }
+        state.onHotKeyChange = { [weak self] in self?.applyHotKey() }
+        applyHotKey()
         // Notifications miss apps that cover the display without a Space of their own.
         fullscreenTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateFullscreen() }
+            MainActor.assumeIsolated { self?.updateVisibility() }
         }
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
@@ -98,19 +119,43 @@ final class NotchWindowController {
         screen = s
         state.layout = NotchGeometry.layout(for: s)
         panel.setFrame(NotchGeometry.panelFrame(on: s), display: true)
-        updateFullscreen()
+        updateVisibility()
     }
 
-    private func updateFullscreen() {
+    private func applyHotKey() {
+        toggleHotKey?.unregister()
+        toggleHotKey = nil
+        state.hotKeyRefused = false
+        guard let key = state.settings.toggleHotKey else { return }
+        toggleHotKey = GlobalHotKey(keyCode: key.keyCode, modifiers: key.modifiers) { [weak self] in
+            self?.toggleFromShortcut()
+        }
+        state.hotKeyRefused = toggleHotKey == nil
+    }
+
+    private func toggleFromShortcut() {
+        guard !steppedAside, state.notchMode != .approval else { return }
+        if state.expanded {
+            setExpanded(false)
+            hoverSuppressed = true
+        } else {
+            setExpanded(true)
+            openedByShortcut = true
+        }
+    }
+
+    private func updateVisibility() {
         guard let screen else { return }
-        let fullscreen = FullscreenDetector.isFullscreen(screen)
-        guard fullscreen != hiddenForFullscreen else { return }
-        hiddenForFullscreen = fullscreen
-        state.notchHidden = fullscreen
-        state.alerts.hold(.fullscreen, fullscreen)
+        let hide = FullscreenDetector.isFullscreen(screen)
+            || (state.settings.hideWhileCaptured && ScreenCaptureProbe.isCaptured)
+        guard hide != steppedAside else { return }
+        steppedAside = hide
+        state.notchHidden = hide
+        state.alerts.hold(.fullscreen, hide)
         // A prompt nobody can see goes back to the terminal.
-        if fullscreen { for p in state.approvals { state.resolveApproval(p.id, .none) } }
-        if fullscreen {
+        if hide { for p in state.approvals { state.resolveApproval(p.id, .none) } }
+        if hide {
+            openedByShortcut = false
             state.expanded = false
             panel.ignoresMouseEvents = true
             panel.orderOut(nil)
@@ -120,7 +165,7 @@ final class NotchWindowController {
     }
 
     private func poll() {
-        guard let screen, !hiddenForFullscreen else { return }
+        guard let screen, !steppedAside else { return }
         // Debug: `--preview-expanded` pins the expanded view open for screenshots.
         if CommandLine.arguments.contains("--preview-expanded") {
             setExpanded(true)
@@ -149,6 +194,10 @@ final class NotchWindowController {
         }
         let now = Date()
 
+        if hoverSuppressed {
+            if inside { return }
+            hoverSuppressed = false
+        }
         if inside {
             outsideSince = nil
             if !state.expanded {
@@ -157,7 +206,7 @@ final class NotchWindowController {
             }
         } else {
             insideSince = nil
-            if state.expanded {
+            if state.expanded, !openedByShortcut {
                 if outsideSince == nil { outsideSince = now }
                 if now.timeIntervalSince(outsideSince!) > 0.35 { setExpanded(false) }
             }
@@ -173,7 +222,7 @@ final class NotchWindowController {
     /// Click mode: a click on the pill expands; a click outside the shape collapses.
     /// Returns true when the click was used to expand and should not reach the views.
     private func handleClick() -> Bool {
-        guard state.settings.expandTrigger == .click, state.notchMode != .approval, let screen, !hiddenForFullscreen else {
+        guard state.settings.expandTrigger == .click || openedByShortcut, state.notchMode != .approval, let screen, !steppedAside else {
             return false
         }
         let inside = isInside(NSEvent.mouseLocation, screen: screen)
@@ -186,13 +235,14 @@ final class NotchWindowController {
     }
 
     private func collapseOnOutsideClick() {
-        guard state.settings.expandTrigger == .click, state.expanded, state.notchMode != .approval,
+        guard state.settings.expandTrigger == .click || openedByShortcut, state.expanded, state.notchMode != .approval,
               !CommandLine.arguments.contains("--preview-expanded") else { return }
         setExpanded(false)
     }
 
     private func setExpanded(_ value: Bool) {
         guard state.expanded != value else { return }
+        if !value { openedByShortcut = false }
         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
             state.expanded = value
         }

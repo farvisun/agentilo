@@ -4,6 +4,12 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- A global shortcut opens and closes the notch from anywhere (Settings → General, none by default). Opened this way it stays open until the shortcut, Esc or a click outside.
+- Hide while the screen is shared or recorded (Settings → General, off by default): the notch steps aside and holds alerts, as for a full-screen app.
+- Copy an image of an account's limits from its page in the notch. It leaves out the email and account name.
+
 ### Fixed
 
 - Codex subagent and forked sessions no longer count the parent's history they replay at the start of their log, in tokens, cost, prompts and tool calls. Replayed limits no longer replace newer ones in the offline fallback.

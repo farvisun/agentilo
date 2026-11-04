@@ -1336,3 +1336,20 @@ final class StatsAccuracyTests: XCTestCase {
         XCTAssertEqual(todayTokens(engine.compute(accounts: [account], now: now)), 220)
     }
 }
+
+final class QuickWinSettingsTests: XCTestCase {
+    func testOldSettingsHaveNoShortcutAndStayVisibleWhileCaptured() throws {
+        let s = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertNil(s.toggleHotKey)
+        XCTAssertFalse(s.hideWhileCaptured)
+    }
+
+    func testShortcutSurvivesSaving() throws {
+        var s = AppSettings()
+        s.toggleHotKey = HotKey(keyCode: 0, modifiers: 6_144, display: "⌃⌥A")
+        s.hideWhileCaptured = true
+        let back = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(back.toggleHotKey, s.toggleHotKey)
+        XCTAssertTrue(back.hideWhileCaptured)
+    }
+}
