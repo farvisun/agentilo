@@ -725,6 +725,24 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(store.sessions.values.first?.state, .idle)
     }
 
+    func testHerdrDoneFinishesTheTurnOnce() {
+        var store = AgentSessionStore()
+        store.applyHerdr([herdr(.working)], now: t0)
+        store.applyHerdr([herdr(.working)], now: t0.addingTimeInterval(5))
+        // herdr says done, not idle, while the pane is out of sight.
+        let done = store.applyHerdr([herdr(.done)], now: t0.addingTimeInterval(30))
+        XCTAssertEqual(done.map(\.to), [.done])
+        XCTAssertEqual(done.first?.from, .working)
+        XCTAssertEqual(store.applyHerdr([herdr(.done)], now: t0.addingTimeInterval(32)), [])
+        // Looking at the pane later must not finish the turn again.
+        XCTAssertEqual(store.applyHerdr([herdr(.idle)], now: t0.addingTimeInterval(40)), [])
+    }
+
+    func testParsesHerdrDoneStatus() throws {
+        let json = #"{"result":{"agents":[{"agent":"claude","agent_status":"done","pane_id":"w:p1"}]}}"#
+        XCTAssertEqual(HerdrSource.parse(Data(json.utf8))?.first?.status, .done)
+    }
+
     func testParsesHerdrList() throws {
         let agents = try XCTUnwrap(HerdrSource.parse(try fixture("herdr_agents.json")))
         XCTAssertEqual(agents.count, 2)

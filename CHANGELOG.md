@@ -4,6 +4,10 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- "Finished" alerts now appear while the terminal is in the background. herdr reports such a turn as `done`, which Agentilo ignored until the pane was seen, so the session also stayed "working" and kept the Mac awake.
+
 ## [0.6.1] - 2026-10-30
 
 ### Added

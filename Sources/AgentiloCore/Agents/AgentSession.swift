@@ -189,7 +189,7 @@ public struct AgentSessionStore: Equatable, Sendable {
                 if !fresh { next = .working }
             case .blocked:
                 if !s.state.needsAttention { next = .waitingPermission }
-            case .idle:
+            case .idle, .done:
                 // Idle after work means the turn finished; idle at start is just idle.
                 // A closed approval prompt likewise; a question stays open until the next prompt.
                 if (s.state == .working || s.state == .waitingPermission) && !fresh { next = .done }

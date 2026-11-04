@@ -6,6 +6,8 @@ public struct HerdrAgent: Equatable, Sendable {
         case working
         case blocked
         case idle
+        /// Finished and not yet seen: what herdr reports while the pane is out of sight.
+        case done
         case unknown
     }
 
