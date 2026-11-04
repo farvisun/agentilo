@@ -275,6 +275,7 @@ private struct DayToggle: View {
 struct AccountsTab: View {
     @Bindable var state: AppState
     @State private var selection: UUID?
+    @State private var keySheet: APIKeyTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -284,8 +285,10 @@ struct AccountsTab: View {
 
             List(selection: $selection) {
                 ForEach($state.settings.accounts) { $acct in
-                    AccountRow(account: $acct, status: state.status(acct))
-                        .tag(acct.id)
+                    AccountRow(account: $acct, status: state.status(acct)) {
+                        keySheet = APIKeyTarget(account: acct.id)
+                    }
+                    .tag(acct.id)
                 }
                 .onMove { state.settings.accounts.move(fromOffsets: $0, toOffset: $1) }
             }
@@ -294,13 +297,18 @@ struct AccountsTab: View {
             HStack {
                 Menu {
                     ForEach(Provider.allCases) { p in
-                        Button("\(p.displayName) home…") { addAccount(p) }
+                        switch p {
+                        case .copilot: Button("Copilot (GitHub CLI login)") { addCopilot() }
+                        case .openRouter: Button("OpenRouter key…") { keySheet = APIKeyTarget(account: nil) }
+                        default: Button("\(p.displayName) home…") { addAccount(p) }
+                        }
                     }
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
                 .fixedSize()
                 Button {
+                    if let selection { KeychainStore.setAPIKey("", for: selection) }
                     state.settings.accounts.removeAll { $0.id == selection }
                     selection = nil
                 } label: {
@@ -329,6 +337,26 @@ struct AccountsTab: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .sheet(item: $keySheet) { target in
+            APIKeySheet { key in
+                if let id = target.account {
+                    KeychainStore.setAPIKey(key, for: id)
+                } else {
+                    let account = Account(provider: .openRouter, homePath: "", label: Provider.openRouter.displayName)
+                    KeychainStore.setAPIKey(key, for: account.id)
+                    state.settings.accounts.append(account)
+                }
+                state.refreshAll(force: true)
+            }
+        }
+    }
+
+    /// Never added by Detect homes: the GitHub CLI's token reaches much more than Copilot,
+    /// so reading it is the user's choice.
+    private func addCopilot() {
+        state.settings.accounts.append(Account(
+            provider: .copilot, homePath: "~/.config/gh", label: Provider.copilot.displayName
+        ))
     }
 
     private func addAccount(_ provider: Provider) {
@@ -341,7 +369,7 @@ struct AccountsTab: View {
         case .claude: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         case .codex: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         case .cursor: panel.directoryURL = URL(fileURLWithPath: CursorCredentials.defaultHome)
-        case .gemini: panel.directoryURL = URL(fileURLWithPath: Paths.home)
+        case .gemini, .copilot, .openRouter: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         }
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -352,9 +380,47 @@ struct AccountsTab: View {
     }
 }
 
+/// Which account the key sheet is for; nil adds a new one.
+private struct APIKeyTarget: Identifiable {
+    let id = UUID()
+    var account: UUID?
+}
+
+private struct APIKeySheet: View {
+    var save: (String) -> Void
+    @State private var key = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("OpenRouter key").font(.headline)
+            SecureField("sk-or-…", text: $key)
+                .textFieldStyle(.roundedBorder)
+            Text("A management key shows the credit balance; a standard key shows only its own limit. The key stays in your Keychain and goes only to openrouter.ai.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Save") {
+                    save(key.trimmingCharacters(in: .whitespacesAndNewlines))
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
+    }
+}
+
 struct AccountRow: View {
     @Binding var account: Account
     var status: AccountStatus
+    var replaceKey: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 10) {
@@ -364,7 +430,7 @@ struct AccountRow: View {
                 TextField("Label", text: $account.label)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
-                Text(Paths.abbreviate(account.homePath))
+                Text(account.provider == .openRouter ? "Key in Keychain" : Paths.abbreviate(account.homePath))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -372,6 +438,9 @@ struct AccountRow: View {
             }
             Spacer()
             statusText
+            if account.provider == .openRouter {
+                Button("Replace Key…", action: replaceKey).controlSize(.small)
+            }
             Toggle("Limits", isOn: $account.trackLimits)
                 .toggleStyle(.checkbox)
                 .help("Fetch plan limits from the provider. Off = only count tokens from this home.")

@@ -350,6 +350,8 @@ public enum AccountDetector {
             return "Cursor"
         case .gemini:
             return GeminiCredentials.email(home: path) ?? "Gemini"
+        case .copilot, .openRouter:
+            return provider.displayName
         }
         return (path as NSString).lastPathComponent
     }

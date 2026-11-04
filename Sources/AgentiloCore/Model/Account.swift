@@ -5,6 +5,8 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
     case codex
     case cursor
     case gemini
+    case copilot
+    case openRouter
 
     public var id: String { rawValue }
 
@@ -14,6 +16,8 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         case .codex: "Codex"
         case .cursor: "Cursor"
         case .gemini: "Gemini"
+        case .copilot: "Copilot"
+        case .openRouter: "OpenRouter"
         }
     }
 
@@ -24,8 +28,13 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         case .codex: URL(string: "https://chatgpt.com/backend-api/wham/usage")!
         case .cursor: URL(string: "https://cursor.com/api/usage-summary")!
         case .gemini: URL(string: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")!
+        case .copilot: CopilotProvider.endpoint
+        case .openRouter: OpenRouterProvider.keyEndpoint
         }
     }
+
+    /// Whether another account of this provider can be started from a command, so suggesting one helps.
+    public var switchesAccounts: Bool { ![.copilot, .openRouter].contains(self) }
 }
 
 /// One signed-in agent home. Each home is its own account with its own limits,
@@ -34,6 +43,7 @@ public struct Account: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var provider: Provider
     /// Agent home directory (`~/.claude`, `~/.codex_work`, Cursor's globalStorage dir, ...).
+    /// Copilot: the GitHub CLI config directory. OpenRouter has none; its key is in the Keychain.
     public var homePath: String
     public var label: String
     public var enabled: Bool

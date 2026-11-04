@@ -38,7 +38,7 @@ struct AgentsTab: View {
             }
 
             Section("Hooks") {
-                let accounts = state.settings.accounts.filter { $0.enabled && $0.provider != .cursor }
+                let accounts = state.settings.accounts.filter { $0.enabled && HookInstaller.configURL(for: $0) != nil }
                 if accounts.isEmpty {
                     Text("No Claude Code, Codex or Gemini CLI homes configured.").foregroundStyle(.secondary)
                 }

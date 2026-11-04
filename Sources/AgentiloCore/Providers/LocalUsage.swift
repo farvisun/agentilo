@@ -117,7 +117,7 @@ public enum LocalUsage {
             return candidates.max { $0.fetchedAt < $1.fetchedAt }?.rolledOver(now: now)
         case .claude:
             return stored.map { estimate($0, account: account, engine: engine, now: now) }
-        case .cursor, .gemini:
+        case .cursor, .gemini, .copilot, .openRouter:
             return stored.map { s -> UsageSnapshot in
                 var c = s.snapshot.rolledOver(now: now)
                 c.source = .cached

@@ -8,7 +8,7 @@ if cliArgs.contains("--dump") {
     exit(0)
 }
 
-// Debug: `--preview-share-card <path>` writes a sample of the picture "Copy image" makes.
+// Debug: `--preview-share-card <path> [provider]` writes a sample of the picture "Copy image" makes.
 if let i = cliArgs.firstIndex(of: "--preview-share-card"), i + 1 < cliArgs.count {
     let now = Date()
     let snapshot = UsageSnapshot(windows: [
@@ -19,7 +19,8 @@ if let i = cliArgs.firstIndex(of: "--preview-share-card"), i + 1 < cliArgs.count
         UsageWindow(id: "extra", kind: .billing, title: "Extra usage", usedPercent: 12,
                     resetsAt: nil, windowLength: nil, detail: "$2.40 of $20.00"),
     ], plan: "Max", email: "hidden@example.com", fetchedAt: now)
-    let card = ShareCardRenderer.png(ShareCard(provider: .claude, snapshot: snapshot, mode: .used, now: now))
+    let provider = cliArgs.dropFirst(i + 2).first.flatMap(Provider.init(rawValue:)) ?? .claude
+    let card = ShareCardRenderer.png(ShareCard(provider: provider, snapshot: snapshot, mode: .used, now: now))
     exit(card.flatMap { try? $0.write(to: URL(fileURLWithPath: cliArgs[i + 1])) } != nil ? 0 : 1)
 }
 

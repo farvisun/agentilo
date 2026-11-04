@@ -22,7 +22,7 @@ public enum AccountAdvisor {
 
     /// One suggestion per provider at most, for providers with two or more accounts.
     public static func suggest(accounts: [Account], snapshots: [UUID: UsageSnapshot], now: Date = Date()) -> [AccountSuggestion] {
-        let byProvider = Dictionary(grouping: accounts.filter { $0.enabled && $0.trackLimits }, by: \.provider)
+        let byProvider = Dictionary(grouping: accounts.filter { $0.enabled && $0.trackLimits && $0.provider.switchesAccounts }, by: \.provider)
         return Provider.allCases.compactMap { provider in
             let rated = (byProvider[provider] ?? []).compactMap { acct in
                 snapshots[acct.id].flatMap { rate($0, now: now) }.map { (acct, $0) }
@@ -56,7 +56,7 @@ public enum AccountAdvisor {
             return home == Paths.expand("~/.codex") ? "codex" : "CODEX_HOME=\(shellPath(home)) codex"
         case .gemini:
             return home == Paths.expand("~/.gemini") ? "gemini" : nil
-        case .cursor:
+        case .cursor, .copilot, .openRouter:
             return nil
         }
     }

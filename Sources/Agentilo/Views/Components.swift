@@ -29,6 +29,8 @@ extension Provider {
         case .codex: Color(red: 0.55, green: 0.65, blue: 1.00)
         case .cursor: Color(red: 0.75, green: 0.75, blue: 0.80)
         case .gemini: Color(red: 0.19, green: 0.53, blue: 1.00)
+        case .copilot: Color(red: 0.62, green: 0.48, blue: 0.95)
+        case .openRouter: Color(red: 0.40, green: 0.72, blue: 0.68)
         }
     }
 }

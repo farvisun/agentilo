@@ -28,7 +28,7 @@ public enum HookInstaller {
         case .claude: account.homeURL.appendingPathComponent("settings.json")
         case .codex: account.homeURL.appendingPathComponent("hooks.json")
         case .gemini: account.homeURL.appendingPathComponent("settings.json")
-        case .cursor: nil
+        case .cursor, .copilot, .openRouter: nil
         }
     }
 
@@ -40,7 +40,7 @@ public enum HookInstaller {
             [.sessionStart, .prompt, .preTool, .postTool, .stop]
         case .gemini:
             [.sessionStart, .prompt, .preTool, .postTool, .notification, .stop, .sessionEnd]
-        case .cursor:
+        case .cursor, .copilot, .openRouter:
             []
         }
     }

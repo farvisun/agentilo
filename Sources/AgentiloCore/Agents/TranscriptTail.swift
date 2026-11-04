@@ -88,7 +88,7 @@ public enum TranscriptTail {
                     let hits = ((try? fm.contentsOfDirectory(atPath: chats.path)) ?? []).filter { $0.hasSuffix(suffix) }.sorted()
                     if let last = hits.last { return chats.appendingPathComponent(last) }
                 }
-            case .cursor:
+            case .cursor, .copilot, .openRouter:
                 break
             }
         }

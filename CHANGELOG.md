@@ -9,6 +9,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 - A global shortcut opens and closes the notch from anywhere (Settings → General, none by default). Opened this way it stays open until the shortcut, Esc or a click outside.
 - Hide while the screen is shared or recorded (Settings → General, off by default): the notch steps aside and holds alerts, as for a full-screen app.
 - Copy an image of an account's limits from its page in the notch. It leaves out the email and account name.
+- GitHub Copilot limits, from your GitHub CLI login. Added by hand in Settings → Accounts, never auto-detected.
+- OpenRouter credits and key limit, with a key you paste into Settings → Accounts, kept in the Keychain.
 
 ### Fixed
 

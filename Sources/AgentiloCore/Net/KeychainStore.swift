@@ -1,9 +1,10 @@
 import Foundation
 import Security
 
-/// Keychain access for secrets the app owns (proxy passwords).
+/// Keychain access for secrets the app owns (proxy passwords, API keys).
 public enum KeychainStore {
     static let service = "app.agentilo.proxy"
+    static let apiKeyService = "app.agentilo.apikey"
     /// Service name from before the rename; read as a fallback and cleared on the next save.
     static let legacyService = "app.agentlimits.proxy"
 
@@ -39,6 +40,27 @@ public enum KeychainStore {
         var add = base
         add[kSecValueData as String] = Data(password.utf8)
         add[kSecAttrLabel as String] = "Agentilo proxy (\(key))"
+        SecItemAdd(add as CFDictionary, nil)
+    }
+}
+
+extension KeychainStore {
+    public static func apiKey(for account: UUID) -> String? {
+        password(for: account.uuidString, service: apiKeyService)
+    }
+
+    /// An empty key removes the item.
+    public static func setAPIKey(_ key: String, for account: UUID) {
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: apiKeyService,
+            kSecAttrAccount as String: account.uuidString,
+        ]
+        SecItemDelete(base as CFDictionary)
+        guard !key.isEmpty else { return }
+        var add = base
+        add[kSecValueData as String] = Data(key.utf8)
+        add[kSecAttrLabel as String] = "Agentilo API key"
         SecItemAdd(add as CFDictionary, nil)
     }
 }

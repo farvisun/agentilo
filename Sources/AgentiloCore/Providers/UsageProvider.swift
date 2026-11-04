@@ -38,6 +38,8 @@ public enum UsageProviders {
         case .codex: CodexProvider()
         case .cursor: CursorProvider()
         case .gemini: GeminiProvider()
+        case .copilot: CopilotProvider()
+        case .openRouter: OpenRouterProvider()
         }
     }
 }

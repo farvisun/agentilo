@@ -1353,3 +1353,72 @@ final class QuickWinSettingsTests: XCTestCase {
         XCTAssertTrue(back.hideWhileCaptured)
     }
 }
+
+final class NewProviderTests: XCTestCase {
+    func testCopilotMapsQuotasAndSkipsUnlimitedAndEmpty() throws {
+        let snap = CopilotProvider.parse(try fixtureJSON("copilot_usage.json"))
+        XCTAssertEqual(snap.plan, "Individual")
+        XCTAssertEqual(snap.email, "octocat")
+        XCTAssertEqual(snap.windows.map(\.id), ["chat"])
+        let chat = try XCTUnwrap(snap.windows.first)
+        XCTAssertEqual(chat.usedPercent, 25)
+        XCTAssertEqual(chat.detail, "50 of 200")
+        XCTAssertEqual(chat.resetsAt, DateParsing.iso("2026-12-01T00:00:00.000Z"))
+        XCTAssertEqual(chat.windowLength, 30 * 86_400, "November has 30 days")
+    }
+
+    func testOpenRouterManagementKeyShowsCreditsAndLimit() throws {
+        let key: [String: Any] = ["data": ["limit": 20.0, "limit_remaining": 15.0, "usage": 5.0, "is_free_tier": false]]
+        let credits: [String: Any] = ["data": ["total_credits": 100.0, "total_usage": 25.5]]
+        let snap = OpenRouterProvider.parse(key: key, credits: credits)
+        XCTAssertEqual(snap.plan, "Pay-as-you-go")
+        XCTAssertEqual(snap.windows.map(\.id), ["credits", "key_limit"])
+        XCTAssertEqual(snap.windows[0].usedPercent, 25.5, accuracy: 1e-9)
+        XCTAssertEqual(snap.windows[0].detail, "$74.50 left")
+        XCTAssertEqual(snap.windows[1].usedPercent, 25, accuracy: 1e-9)
+        XCTAssertEqual(snap.windows[1].detail, "$5.00 of $20.00")
+    }
+
+    func testOpenRouterStandardKeyWithoutLimitHasNothingToShow() {
+        let key: [String: Any] = ["data": ["limit": NSNull(), "limit_remaining": NSNull(), "usage": 5.0, "is_free_tier": true]]
+        let snap = OpenRouterProvider.parse(key: key, credits: nil)
+        XCTAssertTrue(snap.windows.isEmpty)
+        XCTAssertEqual(snap.plan, "Free")
+    }
+
+    func testNewProvidersHaveNoLogsHooksOrSwitchCommand() {
+        for provider in [Provider.copilot, .openRouter] {
+            let account = Account(provider: provider, homePath: provider == .copilot ? "~/.config/gh" : "", label: "x")
+            XCTAssertNil(StatsEngine.logRoot(provider, home: "/tmp"))
+            XCTAssertNil(HookInstaller.configURL(for: account))
+            XCTAssertNil(AccountAdvisor.command(for: account))
+            XCTAssertFalse(provider.switchesAccounts)
+        }
+    }
+
+    func testAdvisorDoesNotSuggestSwitchingNewProviders() {
+        let reset = Date().addingTimeInterval(86_400)
+        func snap(_ used: Double) -> UsageSnapshot {
+            UsageSnapshot(windows: [UsageWindow(id: "chat", kind: .billing, title: "Chat", usedPercent: used, resetsAt: reset, windowLength: 30 * 86_400)])
+        }
+        let busy = Account(provider: .copilot, homePath: "~/.config/gh", label: "a")
+        let idle = Account(provider: .copilot, homePath: "~/.config/gh2", label: "b")
+        XCTAssertTrue(AccountAdvisor.suggest(accounts: [busy, idle], snapshots: [busy.id: snap(95), idle.id: snap(5)]).isEmpty)
+    }
+
+    func testPayloadCarriesNewProviders() throws {
+        let account = Account(provider: .openRouter, homePath: "", label: "secret label")
+        let snap = UsageSnapshot(windows: [UsageWindow(id: "credits", kind: .billing, title: "Credits", usedPercent: 10, resetsAt: nil, windowLength: nil, detail: "$9.00 left")])
+        let payload = LimitsPayload.build(accounts: [account], snapshots: [account.id: snap], includeLabels: false, origin: "app")
+        XCTAssertEqual(payload.accounts.first?.provider, .openRouter)
+        XCTAssertEqual(payload.accounts.first?.label, "OpenRouter 1")
+        XCTAssertEqual(payload.accounts.first?.windows.first?.detail, "$9.00 left")
+        let back = try APIJSON.decoder.decode(LimitsPayload.self, from: APIJSON.encoder.encode(payload))
+        XCTAssertEqual(back.accounts.first?.provider, .openRouter)
+    }
+
+    func testDetectNeverAddsCopilotOrOpenRouter() {
+        let found = AccountDetector.detect(existing: [])
+        XCTAssertFalse(found.contains { !$0.provider.switchesAccounts })
+    }
+}
