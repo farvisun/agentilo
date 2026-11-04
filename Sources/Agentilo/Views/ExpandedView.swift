@@ -178,6 +178,7 @@ struct AccountPage: View {
     var now: Date
     var suggestion: AccountSuggestion? = nil
     var terminal: TerminalApp = .none
+    @State private var copiedImage = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -245,6 +246,23 @@ struct AccountPage: View {
                     .font(.system(size: 10))
                     .foregroundStyle(snap.source == .live ? Palette.tertiary : Palette.amber)
                     .help(status.error ?? "")
+            }
+            if let snap = status.snapshot, !snap.windows.isEmpty {
+                Button {
+                    let card = ShareCard(provider: account.provider, snapshot: snap, mode: mode, now: now)
+                    guard ShareCardRenderer.copy(card) else { return }
+                    copiedImage = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copiedImage = false
+                    }
+                } label: {
+                    Image(systemName: copiedImage ? "checkmark" : "photo.on.rectangle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(copiedImage ? Palette.green : Palette.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Copy an image of these limits. It leaves out your email and account name.")
             }
         }
     }

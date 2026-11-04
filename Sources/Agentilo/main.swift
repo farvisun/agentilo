@@ -8,6 +8,21 @@ if cliArgs.contains("--dump") {
     exit(0)
 }
 
+// Debug: `--preview-share-card <path>` writes a sample of the picture "Copy image" makes.
+if let i = cliArgs.firstIndex(of: "--preview-share-card"), i + 1 < cliArgs.count {
+    let now = Date()
+    let snapshot = UsageSnapshot(windows: [
+        UsageWindow(id: "session", kind: .session, title: "Session", usedPercent: 42,
+                    resetsAt: now.addingTimeInterval(7_200), windowLength: 18_000),
+        UsageWindow(id: "weekly", kind: .weekly, title: "Weekly", usedPercent: 81,
+                    resetsAt: now.addingTimeInterval(172_800), windowLength: 604_800),
+        UsageWindow(id: "extra", kind: .billing, title: "Extra usage", usedPercent: 12,
+                    resetsAt: nil, windowLength: nil, detail: "$2.40 of $20.00"),
+    ], plan: "Max", email: "hidden@example.com", fetchedAt: now)
+    let card = ShareCardRenderer.png(ShareCard(provider: .claude, snapshot: snapshot, mode: .used, now: now))
+    exit(card.flatMap { try? $0.write(to: URL(fileURLWithPath: cliArgs[i + 1])) } != nil ? 0 : 1)
+}
+
 // `agentilo <command>`: command-line use of the same binary, through the symlink
 // Settings installs. Never starts the UI.
 switch cliArgs.first {
