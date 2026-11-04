@@ -1422,3 +1422,51 @@ final class NewProviderTests: XCTestCase {
         XCTAssertFalse(found.contains { !$0.provider.switchesAccounts })
     }
 }
+
+final class ResetGrantTests: XCTestCase {
+    func testCodexCountsResetsFromUsageResponse() {
+        let snap = CodexProvider.parse(["rate_limit_reset_credits": ["available_count": 3, "applicable_available_count": 3]])
+        XCTAssertEqual(snap.resetGrants, ResetGrants(available: 3))
+        XCTAssertNil(CodexProvider.parse(["rate_limit_reset_credits": ["available_count": 0]]).resetGrants)
+        XCTAssertNil(CodexProvider.parse([:]).resetGrants)
+    }
+
+    func testNextExpiryIsTheSoonestAvailableCredit() {
+        let body: [String: Any] = ["available_count": 2, "credits": [
+            ["id": "used", "status": "redeemed", "expires_at": "2026-11-05T00:00:00Z"],
+            ["id": "later", "status": "available", "expires_at": "2026-12-01T00:00:00Z"],
+            ["id": "sooner", "expires_at": 1_796_000_000],
+        ]]
+        XCTAssertEqual(CodexProvider.nextResetExpiry(body), DateParsing.iso("2026-12-01T00:00:00Z").map { min($0, Date(timeIntervalSince1970: 1_796_000_000)) })
+        XCTAssertNil(CodexProvider.nextResetExpiry(["credits": []]))
+    }
+
+    func testNothingCanSpendAReset() throws {
+        XCTAssertFalse(CodexProvider.resetCreditsEndpoint.path.contains("consume"))
+    }
+
+    func testOldSnapshotsAndPayloadsDecodeWithoutGrants() throws {
+        let old = #"{"windows":[],"fetchedAt":0,"source":"live"}"#
+        XCTAssertNil(try JSONDecoder().decode(UsageSnapshot.self, from: Data(old.utf8)).resetGrants)
+    }
+
+    func testPayloadCarriesGrantsAndOmitsThemWhenNone() throws {
+        let with = Account(provider: .codex, homePath: "~/.codex", label: "a")
+        let without = Account(provider: .codex, homePath: "~/.codex2", label: "b")
+        let expiry = Date(timeIntervalSince1970: 1_800_000_000)
+        let payload = LimitsPayload.build(accounts: [with, without], snapshots: [
+            with.id: UsageSnapshot(windows: [], resetGrants: ResetGrants(available: 2, nextExpiry: expiry)),
+            without.id: UsageSnapshot(windows: []),
+        ], includeLabels: false, origin: "app")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: APIJSON.encoder.encode(payload)) as? [String: Any])
+        let accounts = try XCTUnwrap(json["accounts"] as? [[String: Any]])
+        XCTAssertEqual((accounts[0]["resetGrants"] as? [String: Any])?["available"] as? Int, 2)
+        XCTAssertNil(accounts[1]["resetGrants"])
+    }
+
+    func testOfflineCodexKeepsTheLastCount() {
+        let base = UsageSnapshot(windows: [], resetGrants: ResetGrants(available: 1))
+        let sample = RateLimitSample(at: Date(), primary: nil, secondary: nil, planType: nil)
+        XCTAssertEqual(LocalUsage.codex(sample, base: base).resetGrants, ResetGrants(available: 1))
+    }
+}

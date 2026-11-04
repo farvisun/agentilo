@@ -23,7 +23,24 @@ public enum CodexCredentials {
     }
 }
 
+/// Credit expiries change rarely and take a request of their own, unlike the count in the usage
+/// response, so each account asks at most once an hour.
+private actor ResetExpiries {
+    static let shared = ResetExpiries()
+    private var known: [UUID: (fetched: Date, expiry: Date?)] = [:]
+
+    func next(account: UUID, fetch: @Sendable () async -> Date?) async -> Date? {
+        if let k = known[account], Date().timeIntervalSince(k.fetched) < 3_600 { return k.expiry }
+        let expiry = await fetch()
+        known[account] = (Date(), expiry)
+        return expiry
+    }
+}
+
 public struct CodexProvider: UsageProvider {
+    /// Read only. Its `/consume` sibling spends a credit and is never called.
+    static let resetCreditsEndpoint = URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")!
+
     static let endpoint = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
 
     public init() {}
@@ -46,6 +63,15 @@ public struct CodexProvider: UsageProvider {
         }
         var snap = Self.parse(json)
         if snap.email == nil { snap.email = tokens.email }
+        if snap.resetGrants != nil {
+            var list = req
+            list.url = Self.resetCreditsEndpoint
+            let listRequest = list
+            snap.resetGrants?.nextExpiry = await ResetExpiries.shared.next(account: account.id) {
+                let body = try? await HTTP.getJSON(listRequest, session: session) { .tokenExpired("") }
+                return body.flatMap(Self.nextResetExpiry)
+            }
+        }
         return snap
     }
 
@@ -73,7 +99,22 @@ public struct CodexProvider: UsageProvider {
             windows.append(UsageWindow(id: "limit", kind: .other, title: "Limit", usedPercent: 100, resetsAt: nil, windowLength: nil))
         }
         let plan = J.string(json["plan_type"]).map(planName)
-        return UsageSnapshot(windows: windows, plan: plan, email: J.string(json["email"]), fetchedAt: now)
+        let resets = J.double(J.dict(json["rate_limit_reset_credits"])?["available_count"]).map { Int($0) } ?? 0
+        return UsageSnapshot(
+            windows: windows, plan: plan, email: J.string(json["email"]), fetchedAt: now,
+            resetGrants: resets > 0 ? ResetGrants(available: resets) : nil
+        )
+    }
+
+    /// The soonest expiry among credits that can still be used.
+    static func nextResetExpiry(_ json: [String: Any]) -> Date? {
+        let credits = (json["credits"] as? [[String: Any]]) ?? []
+        return credits
+            .filter { (J.string($0["status"]) ?? "available") == "available" }
+            .compactMap { c -> Date? in
+                DateParsing.iso(J.string(c["expires_at"])) ?? J.double(c["expires_at"]).map { Date(timeIntervalSince1970: $0) }
+            }
+            .min()
     }
 
     static func planName(_ raw: String) -> String {

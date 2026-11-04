@@ -98,7 +98,8 @@ public enum LocalUsage {
             plan: sample.planType.map(CodexProvider.planName) ?? base?.plan,
             email: base?.email,
             fetchedAt: sample.at,
-            source: .localLog
+            source: .localLog,
+            resetGrants: base?.resetGrants
         )
     }
 

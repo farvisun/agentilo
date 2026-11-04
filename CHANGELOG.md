@@ -11,6 +11,7 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 - Copy an image of an account's limits from its page in the notch. It leaves out the email and account name.
 - GitHub Copilot limits, from your GitHub CLI login. Added by hand in Settings → Accounts, never auto-detected.
 - OpenRouter credits and key limit, with a key you paste into Settings → Accounts, kept in the Keychain.
+- Codex accounts show how many limit resets are available and when the next one expires, in the notch, `/v1/limits` and `agentilo limits --json`. Read only; Agentilo never spends one.
 
 ### Fixed
 

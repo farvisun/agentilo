@@ -67,25 +67,40 @@ public enum SnapshotSource: String, Codable, Sendable {
     case estimated
 }
 
+/// One-off limit resets the provider granted. Agentilo only counts them; using one is an
+/// irreversible action it leaves to the provider's own tools.
+public struct ResetGrants: Codable, Hashable, Sendable {
+    public var available: Int
+    public var nextExpiry: Date?
+
+    public init(available: Int, nextExpiry: Date? = nil) {
+        self.available = available
+        self.nextExpiry = nextExpiry
+    }
+}
+
 public struct UsageSnapshot: Codable, Hashable, Sendable {
     public var windows: [UsageWindow]
     public var plan: String?
     public var email: String?
     public var fetchedAt: Date
     public var source: SnapshotSource
+    public var resetGrants: ResetGrants?
 
     public init(
         windows: [UsageWindow],
         plan: String? = nil,
         email: String? = nil,
         fetchedAt: Date = Date(),
-        source: SnapshotSource = .live
+        source: SnapshotSource = .live,
+        resetGrants: ResetGrants? = nil
     ) {
         self.windows = windows
         self.plan = plan
         self.email = email
         self.fetchedAt = fetchedAt
         self.source = source
+        self.resetGrants = resetGrants
     }
 
     /// Windows whose reset time has passed start over at 0% in their next period.

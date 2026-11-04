@@ -203,6 +203,9 @@ struct AccountPage: View {
                     .frame(maxWidth: .infinity, minHeight: 60)
                     .multilineTextAlignment(.center)
             }
+            if let grants = status.snapshot?.resetGrants {
+                ResetGrantsRow(grants: grants, now: now)
+            }
             Spacer(minLength: 0)
             if let suggestion {
                 SwitchRow(suggestion: suggestion, terminal: terminal)
@@ -344,6 +347,26 @@ private struct SwitchRow: View {
         .foregroundStyle(Color.white)
         .padding(.horizontal, 8).padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.07)))
+    }
+}
+
+private struct ResetGrantsRow: View {
+    var grants: ResetGrants
+    var now: Date
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "arrow.counterclockwise")
+            Text(text)
+        }
+        .font(.system(size: 10))
+        .foregroundStyle(Palette.tertiary)
+    }
+
+    private var text: String {
+        let count = "\(grants.available) limit \(grants.available == 1 ? "reset" : "resets") available"
+        guard let expiry = grants.nextExpiry, expiry > now else { return count }
+        return "\(count) · next expires \(expiry.formatted(date: .abbreviated, time: .omitted))"
     }
 }
 

@@ -22,6 +22,8 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
         public var fetchedAt: Date?
         public var error: String?
         public var windows: [WindowLimits]
+        /// One-off limit resets available to the account. Absent when there are none.
+        public var resetGrants: ResetGrants?
     }
 
     public struct WindowLimits: Codable, Equatable, Sendable {
@@ -58,7 +60,8 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
                 source: snap?.source,
                 fetchedAt: snap?.fetchedAt,
                 error: errors[acct.id],
-                windows: (snap?.windows ?? []).map { window($0, now: now) }
+                windows: (snap?.windows ?? []).map { window($0, now: now) },
+                resetGrants: snap?.resetGrants
             )
         }
         return LimitsPayload(

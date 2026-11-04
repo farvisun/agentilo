@@ -32,6 +32,7 @@ enum DumpCommand {
                 let session = SessionFactory.shared.session(for: proxy)
                 let snap = try await UsageProviders.provider(for: acct.provider).fetch(account: acct, session: session)
                 print("  plan: \(snap.plan ?? "-")  email: \(snap.email ?? "-")")
+                if let g = snap.resetGrants { print("  limit resets: \(g.available), next expires \(g.nextExpiry.map { Formatters.resetTime($0) } ?? "-")") }
                 for w in snap.windows {
                     let reset = w.resetsAt.map { Formatters.resetTime($0) } ?? "-"
                     print("  \(w.title): \(Int(w.usedPercent.rounded()))%  resets \(reset)  \(w.pace().label())  \(w.detail ?? "")")
