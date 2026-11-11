@@ -439,6 +439,7 @@ final class ProxyTests: XCTestCase {
         XCTAssertEqual(s.preferredTerminal, .none)
         XCTAssertTrue(s.weeklySummary)
         XCTAssertTrue(s.burningFastAlerts)
+        XCTAssertEqual(s.unifiedProviders, [])
         XCTAssertTrue(s.useItOrLoseItAlerts)
         // A terminal this build does not know falls back instead of failing the whole file.
         let odd = try JSONDecoder().decode(AppSettings.self, from: Data("{\"preferredTerminal\": \"warp\"}".utf8))
@@ -1857,5 +1858,38 @@ final class ProviderLinksTests: XCTestCase {
             XCTAssertFalse(p.links.isEmpty, p.rawValue)
             XCTAssertTrue(p.links.allSatisfy { $0.url.scheme == "https" }, p.rawValue)
         }
+    }
+}
+
+final class UnifiedAccountsTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 2_000_000)
+
+    private func w(_ id: String, _ used: Double, reset: TimeInterval, kind: WindowKind = .weekly) -> UsageWindow {
+        UsageWindow(id: id, kind: kind, title: id, usedPercent: used, resetsAt: now.addingTimeInterval(reset),
+                    windowLength: 7 * 86_400)
+    }
+
+    func testAveragesCappedUsageAndTakesSoonestReset() throws {
+        let a = UsageSnapshot(windows: [w("weekly", 120, reset: 3_600), w("opus", 50, reset: 3_600)], plan: "Max",
+                              resetGrants: ResetGrants(available: 1))
+        let b = UsageSnapshot(windows: [w("weekly", 40, reset: 4_200)], plan: "Pro",
+                              resetGrants: ResetGrants(available: 2))
+        let m = try XCTUnwrap(UnifiedAccounts.merge([a, b], now: now))
+        XCTAssertEqual(m.windows.map(\.id), ["weekly", "opus"])
+        XCTAssertEqual(m.windows[0].usedPercent, 70)
+        XCTAssertEqual(m.windows[0].resetsAt, now.addingTimeInterval(3_600))
+        XCTAssertNil(m.windows[0].detail)
+        XCTAssertNotNil(m.windows[0].windowLength, "resets within half an hour keep the pace")
+        XCTAssertEqual(m.windows[1].usedPercent, 50, "only one account has it")
+        XCTAssertEqual(m.plan, "Multiple")
+        XCTAssertEqual(m.resetGrants?.available, 3)
+    }
+
+    func testFarApartResetsDropThePace() throws {
+        let a = UsageSnapshot(windows: [w("weekly", 10, reset: 3_600)])
+        let b = UsageSnapshot(windows: [w("weekly", 30, reset: 3 * 86_400)])
+        let m = try XCTUnwrap(UnifiedAccounts.merge([a, b], now: now))
+        XCTAssertNil(m.windows[0].windowLength)
+        XCTAssertEqual(UnifiedAccounts.breakdown("weekly", [("a", a), ("b", b)]), "a  10%\nb  30%")
     }
 }

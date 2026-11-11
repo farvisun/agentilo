@@ -126,8 +126,35 @@ final class AppState {
 
     /// Pages of the expanded notch, in order.
     var pages: [NotchPage] {
-        (agents.sessions.isEmpty ? [] : [.agents]) + limitAccounts.map { .account($0) }
+        (agents.sessions.isEmpty ? [] : [.agents]) + accountPages
             + (settings.showTokenStats ? [.stats, .activity, .reports] : [])
+    }
+
+    /// One page per account, except a unified provider's accounts, which share the page where
+    /// the first of them would be.
+    private var accountPages: [NotchPage] {
+        var out: [NotchPage] = []
+        var done = Set<Provider>()
+        for acct in limitAccounts {
+            let group = limitAccounts.filter { $0.provider == acct.provider }
+            if settings.unifiedProviders.contains(acct.provider), group.count > 1 {
+                if done.insert(acct.provider).inserted { out.append(.unified(acct.provider, group)) }
+            } else {
+                out.append(.account(acct))
+            }
+        }
+        return out
+    }
+
+    /// A unified page's merged snapshot and status.
+    func unifiedStatus(_ accounts: [Account]) -> AccountStatus {
+        let parts = accounts.map(status)
+        var st = AccountStatus()
+        st.snapshot = UnifiedAccounts.merge(parts.compactMap(\.snapshot), now: now)
+        st.loading = parts.contains(where: \.loading)
+        let errors = zip(accounts, parts).compactMap { a, s in s.error.map { "\(a.label): \($0)" } }
+        st.error = errors.isEmpty ? nil : errors.joined(separator: "\n")
+        return st
     }
 
     var pageCount: Int { pages.count }

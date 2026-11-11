@@ -192,6 +192,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var pillShowsAgents = true
     /// Point to a sibling account with room left when one runs low.
     public var accountSuggestions = true
+    /// Providers whose accounts share one page in the notch (Claude, Codex).
+    public var unifiedProviders: [Provider] = []
     public var preferredTerminal = TerminalApp.none
     /// Monday morning alert with last week's numbers.
     public var weeklySummary = true
@@ -254,6 +256,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         agentDoneSummary = try c.decodeIfPresent(Bool.self, forKey: .agentDoneSummary) ?? d.agentDoneSummary
         pillShowsAgents = try c.decodeIfPresent(Bool.self, forKey: .pillShowsAgents) ?? d.pillShowsAgents
         accountSuggestions = try c.decodeIfPresent(Bool.self, forKey: .accountSuggestions) ?? d.accountSuggestions
+        unifiedProviders = (try? c.decodeIfPresent([Provider].self, forKey: .unifiedProviders)) ?? d.unifiedProviders
         preferredTerminal = (try? c.decodeIfPresent(TerminalApp.self, forKey: .preferredTerminal)) ?? d.preferredTerminal
         weeklySummary = try c.decodeIfPresent(Bool.self, forKey: .weeklySummary) ?? d.weeklySummary
         approvalsEnabled = try c.decodeIfPresent(Bool.self, forKey: .approvalsEnabled) ?? d.approvalsEnabled

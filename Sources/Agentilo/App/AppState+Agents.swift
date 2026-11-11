@@ -13,6 +13,8 @@ struct PendingApproval: Identifiable, Equatable {
 enum NotchPage: Equatable {
     case agents
     case account(Account)
+    /// Several accounts of one provider on one page (Settings → Accounts).
+    case unified(Provider, [Account])
     case stats
     case activity
     case reports

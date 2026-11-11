@@ -361,6 +361,13 @@ struct AccountsTab: View {
             }
 
             Divider().padding(.vertical, 2)
+            ForEach(UnifiedAccounts.providers, id: \.self) { p in
+                let n = state.limitAccounts.filter { $0.provider == p }.count
+                if n > 1 {
+                    Toggle("Show my \(n) \(p.displayName) accounts as one page", isOn: unified(p))
+                        .help("Each limit once, averaged over the accounts; hover a limit for each account. Alerts and the collapsed notch stay per account.")
+                }
+            }
             Toggle("Suggest another account when one runs low", isOn: $state.settings.accountSuggestions)
             HStack {
                 Picker("Open suggested accounts in", selection: $state.settings.preferredTerminal) {
@@ -390,6 +397,16 @@ struct AccountsTab: View {
                 state.refreshAll(force: true)
             }
         }
+    }
+
+    private func unified(_ p: Provider) -> Binding<Bool> {
+        Binding(
+            get: { state.settings.unifiedProviders.contains(p) },
+            set: { on in
+                state.settings.unifiedProviders.removeAll { $0 == p }
+                if on { state.settings.unifiedProviders.append(p) }
+            }
+        )
     }
 
     /// Never added by Detect homes: the GitHub CLI's token reaches much more than Copilot,

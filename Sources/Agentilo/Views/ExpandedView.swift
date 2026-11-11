@@ -28,6 +28,22 @@ struct ExpandedView: View {
                         refresh: { state.refresh(acct, force: true) }
                     )
                         .id(acct.id)
+                case .unified(let provider, let accounts):
+                    AccountPage(
+                        account: Account(id: accounts[0].id, provider: provider, homePath: "",
+                                         label: "\(accounts.count) accounts"),
+                        status: state.unifiedStatus(accounts), stats: state.stats,
+                        mode: state.settings.displayMode, now: state.now,
+                        nextCheck: accounts.compactMap { state.nextCheck(for: $0.id) }.min(),
+                        heldUntil: accounts.compactMap { state.providerHolds($0.id) }.max(),
+                        refresh: { for a in accounts { state.refresh(a, force: true) } },
+                        breakdown: accounts.enumerated().compactMap { i, a in
+                            state.status(a).snapshot.map {
+                                (label: state.concealNames ? "Account \(i + 1)" : a.label, snapshot: $0)
+                            }
+                        }
+                    )
+                        .id(accounts[0].id)
                 case .stats:
                     StatsPage(stats: state.stats)
                 case .activity:
@@ -184,6 +200,8 @@ struct AccountPage: View {
     /// The provider asked to wait until then; checking sooner is not offered.
     var heldUntil: Date? = nil
     var refresh: () -> Void = {}
+    /// Set on a unified page: each account's own snapshot, shown when hovering a limit.
+    var breakdown: [(label: String, snapshot: UsageSnapshot)] = []
     @State private var copiedImage = false
 
     var body: some View {
@@ -193,7 +211,8 @@ struct AccountPage: View {
                 let (meters, more) = Self.split(snap.windows)
                 VStack(spacing: 9) {
                     ForEach(meters) { w in
-                        WindowRow(window: w, mode: mode, estimated: snap.source == .estimated, now: now)
+                        WindowRow(window: w, mode: mode, estimated: snap.source == .estimated, now: now,
+                                  help: breakdown.isEmpty ? nil : UnifiedAccounts.breakdown(w.id, breakdown))
                     }
                 }
                 if !more.isEmpty {
@@ -455,6 +474,7 @@ struct WindowRow: View {
     var mode: UsageDisplay
     var estimated: Bool
     var now: Date
+    var help: String? = nil
 
     var body: some View {
         let pace = window.pace(now: now)
@@ -485,6 +505,7 @@ struct WindowRow: View {
                 expected: window.elapsedFraction(now: now).map { mode == .used ? $0 : 1 - $0 }
             )
         }
+        .help(help ?? "")
     }
 
     private var percentText: String {
