@@ -65,7 +65,8 @@ public struct CursorProvider: UsageProvider {
         return snap
     }
 
-    /// Amounts are in cents.
+    /// Amounts are in cents. Newer plans also report percentages: the whole plan, and its split
+    /// between Cursor's own models (Auto) and other providers' models (API).
     static func parse(_ json: [String: Any], now: Date = Date()) -> UsageSnapshot {
         let start = DateParsing.iso(J.string(json["billingCycleStart"]))
         let end = DateParsing.iso(J.string(json["billingCycleEnd"]))
@@ -73,27 +74,44 @@ public struct CursorProvider: UsageProvider {
         let usage = J.dict(json["individualUsage"])
         var windows: [UsageWindow] = []
 
-        if let plan = J.dict(usage?["plan"]), let used = J.double(plan["used"]),
-           let limit = J.double(plan["limit"]), limit > 0 {
+        let plan = J.dict(usage?["plan"])
+        let used = J.double(plan?["used"]), limit = J.double(plan?["limit"])
+        let dollars = (used != nil && (limit ?? 0) > 0)
+            ? String(format: "$%.2f of $%.2f", used! / 100, limit! / 100) : nil
+        if let pct = J.double(plan?["totalPercentUsed"]) ?? ((limit ?? 0) > 0 ? used.map { $0 / limit! * 100 } : nil) {
             windows.append(UsageWindow(
                 id: "plan", kind: .billing, title: "Billing cycle",
-                usedPercent: used / limit * 100, resetsAt: end, windowLength: length,
-                detail: String(format: "$%.2f of $%.2f", used / 100, limit / 100)
+                usedPercent: pct, resetsAt: end, windowLength: length, detail: dollars
             ))
         }
-        if let od = J.dict(usage?["onDemand"]), od["enabled"] as? Bool == true {
-            let used = J.double(od["used"]) ?? 0
-            let limit = J.double(od["limit"])
-            let pct = (limit ?? 0) > 0 ? used / limit! * 100 : 0
-            let detail = (limit ?? 0) > 0
-                ? String(format: "$%.2f of $%.2f", used / 100, limit! / 100)
-                : String(format: "$%.2f spent", used / 100)
-            windows.append(UsageWindow(
-                id: "on_demand", kind: .billing, title: "On-demand",
-                usedPercent: pct, resetsAt: end, windowLength: nil, detail: detail
-            ))
+        for (key, id, title) in [("autoPercentUsed", "auto", "Cursor models"), ("apiPercentUsed", "api", "Other models")] {
+            guard let pct = J.double(plan?[key]) else { continue }
+            windows.append(UsageWindow(id: id, kind: .billing, title: title, usedPercent: pct,
+                                       resetsAt: end, windowLength: length))
         }
-        let plan = J.string(json["membershipType"])?.capitalized
-        return UsageSnapshot(windows: windows, plan: plan, fetchedAt: now)
+
+        // On-demand spend: the user's own limit, else the team's shared pool.
+        let team = J.dict(json["teamUsage"])
+        let isTeam = J.string(json["limitType"]) == "team"
+        let own = J.dict(usage?["onDemand"])
+        let ownLimit = J.double(own?["limit"]) ?? 0
+        if own?["enabled"] as? Bool == true, ownLimit > 0 || !isTeam {
+            windows.append(spend(own!, id: "on_demand", title: "On-demand", end: end))
+        } else if isTeam, let pool = [J.dict(team?["onDemand"]), J.dict(team?["pooled"])]
+            .compactMap({ $0 }).first(where: { $0["enabled"] as? Bool != false && J.double($0["limit"]) ?? 0 > 0 }) {
+            windows.append(spend(pool, id: "team_spend", title: "Team spend", end: end))
+        }
+        let planName = J.string(json["membershipType"])?.capitalized
+        return UsageSnapshot(windows: windows, plan: planName, fetchedAt: now)
+    }
+
+    private static func spend(_ d: [String: Any], id: String, title: String, end: Date?) -> UsageWindow {
+        let limit = J.double(d["limit"]) ?? 0
+        let used = J.double(d["used"]) ?? (limit - (J.double(d["remaining"]) ?? limit))
+        let detail = limit > 0
+            ? String(format: "$%.2f of $%.2f", used / 100, limit / 100)
+            : String(format: "$%.2f spent", used / 100)
+        return UsageWindow(id: id, kind: .billing, title: title, usedPercent: limit > 0 ? used / limit * 100 : 0,
+                           resetsAt: end, windowLength: nil, detail: detail)
     }
 }

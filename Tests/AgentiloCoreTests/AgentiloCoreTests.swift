@@ -123,6 +123,17 @@ final class ProviderParsingTests: XCTestCase {
         XCTAssertEqual(snap.plan, "Pro")
     }
 
+    func testCursorModelSplitAndTeamSpend() throws {
+        let snap = CursorProvider.parse(try fixtureJSON("cursor_usage_team.json"))
+        XCTAssertEqual(snap.windows.map(\.title), ["Billing cycle", "Cursor models", "Other models", "Team spend"])
+        XCTAssertEqual(snap.windows[0].usedPercent, 31.5)
+        XCTAssertEqual(snap.windows[0].detail, "$12.00 of $40.00")
+        XCTAssertEqual(snap.windows[2].usedPercent, 58)
+        XCTAssertEqual(snap.windows[3].usedPercent, 22.5)
+        XCTAssertEqual(snap.windows[3].detail, "$45.00 of $200.00")
+        XCTAssertEqual(snap.plan, "Enterprise")
+    }
+
     func testISODateWithMicroseconds() {
         let d = DateParsing.iso("2026-10-22T13:10:00.489653+00:00")
         XCTAssertNotNil(d)
