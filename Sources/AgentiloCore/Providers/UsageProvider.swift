@@ -108,6 +108,12 @@ public enum DateParsing {
         }
         return plain.date(from: s)?.addingTimeInterval(fraction)
     }
+
+    /// "2026-12-01" as midnight UTC.
+    public static func day(_ s: String?) -> Date? {
+        guard let s, s.count == 10 else { return nil }
+        return iso(s + "T00:00:00Z")
+    }
 }
 
 enum JWT {

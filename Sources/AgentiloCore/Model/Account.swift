@@ -49,6 +49,8 @@ public struct Account: Codable, Identifiable, Hashable, Sendable {
     public var enabled: Bool
     /// Query the provider server for limits. When off, the home only feeds token stats.
     public var trackLimits: Bool
+    /// Copilot on GitHub Enterprise Cloud: the `*.ghe.com` domain. Nil means github.com.
+    public var host: String?
 
     public init(
         id: UUID = UUID(),
@@ -56,7 +58,8 @@ public struct Account: Codable, Identifiable, Hashable, Sendable {
         homePath: String,
         label: String,
         enabled: Bool = true,
-        trackLimits: Bool = true
+        trackLimits: Bool = true,
+        host: String? = nil
     ) {
         self.id = id
         self.provider = provider
@@ -64,6 +67,7 @@ public struct Account: Codable, Identifiable, Hashable, Sendable {
         self.label = label
         self.enabled = enabled
         self.trackLimits = trackLimits
+        self.host = host
     }
 
     public var homeURL: URL { URL(fileURLWithPath: Paths.expand(homePath)) }

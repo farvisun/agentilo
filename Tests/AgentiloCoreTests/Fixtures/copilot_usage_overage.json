@@ -1,0 +1,9 @@
+{
+  "login": "octocat",
+  "copilot_plan": "business",
+  "quota_reset_date_utc": "2026-12-01T00:00:00.000Z",
+  "quota_snapshots": {
+    "premium_interactions": {"entitlement": 300, "remaining": 0, "percent_remaining": 0, "unlimited": false, "overage_count": 12, "overage_permitted": true},
+    "chat": {"entitlement": -1, "remaining": -1, "percent_remaining": 100, "unlimited": false}
+  }
+}

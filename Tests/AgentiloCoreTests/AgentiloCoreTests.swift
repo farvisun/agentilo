@@ -1453,6 +1453,33 @@ final class NewProviderTests: XCTestCase {
         XCTAssertEqual(chat.windowLength, 30 * 86_400, "November has 30 days")
     }
 
+    func testCopilotFreePlanUsesMonthlyQuotas() throws {
+        let snap = CopilotProvider.parse(try fixtureJSON("copilot_usage_free.json"))
+        XCTAssertEqual(snap.windows.map(\.id), ["chat", "completions"])
+        XCTAssertEqual(snap.windows[0].usedPercent, 20, accuracy: 1e-9)
+        XCTAssertEqual(snap.windows[0].detail, "10 of 50")
+        XCTAssertEqual(snap.windows[1].resetsAt, DateParsing.iso("2026-12-01T00:00:00Z"))
+    }
+
+    func testCopilotOverageAndUnknownEntitlement() throws {
+        let snap = CopilotProvider.parse(try fixtureJSON("copilot_usage_overage.json"))
+        XCTAssertEqual(snap.windows.map(\.id), ["premium_interactions", "overage"])
+        XCTAssertEqual(snap.windows[1].kind, .balance)
+        XCTAssertEqual(snap.windows[1].detail, "12 requests")
+    }
+
+    func testGitHubHostAcceptsOnlyDotComAndGHE() {
+        XCTAssertEqual(GitHubHost.normalize(""), "github.com")
+        XCTAssertEqual(GitHubHost.normalize("GitHub.com"), "github.com")
+        XCTAssertEqual(GitHubHost.normalize("octocorp"), "octocorp.ghe.com")
+        XCTAssertEqual(GitHubHost.normalize("https://octocorp.ghe.com/settings"), "octocorp.ghe.com")
+        XCTAssertEqual(GitHubHost.normalize("api.octocorp.ghe.com"), "octocorp.ghe.com")
+        XCTAssertNil(GitHubHost.normalize("github.example.com"))
+        XCTAssertEqual(CopilotProvider.endpoint(host: "octocorp.ghe.com").absoluteString,
+                       "https://api.octocorp.ghe.com/copilot_internal/user")
+        XCTAssertEqual(CopilotProvider.endpoint(host: nil), CopilotProvider.endpoint)
+    }
+
     func testOpenRouterManagementKeyShowsCreditsAndLimit() throws {
         let key: [String: Any] = ["data": ["limit": 20.0, "limit_remaining": 15.0, "usage": 5.0, "is_free_tier": false]]
         let credits: [String: Any] = ["data": ["total_credits": 100.0, "total_usage": 25.5]]

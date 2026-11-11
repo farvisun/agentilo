@@ -280,6 +280,7 @@ struct AccountsTab: View {
     @Bindable var state: AppState
     @State private var selection: UUID?
     @State private var keySheet: APIKeyTarget?
+    @State private var gheSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -302,7 +303,9 @@ struct AccountsTab: View {
                 Menu {
                     ForEach(Provider.allCases) { p in
                         switch p {
-                        case .copilot: Button("Copilot (GitHub CLI login)") { addCopilot() }
+                        case .copilot:
+                            Button("Copilot (GitHub CLI login)") { addCopilot() }
+                            Button("Copilot on GHE.com…") { gheSheet = true }
                         case .openRouter: Button("OpenRouter key…") { keySheet = APIKeyTarget(account: nil) }
                         default: Button("\(p.displayName) home…") { addAccount(p) }
                         }
@@ -341,6 +344,9 @@ struct AccountsTab: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .sheet(isPresented: $gheSheet) {
+            GHEHostSheet { host in addCopilot(host: host) }
+        }
         .sheet(item: $keySheet) { target in
             APIKeySheet { key in
                 if let id = target.account {
@@ -357,10 +363,14 @@ struct AccountsTab: View {
 
     /// Never added by Detect homes: the GitHub CLI's token reaches much more than Copilot,
     /// so reading it is the user's choice.
-    private func addCopilot() {
+    private func addCopilot(host: String = GitHubHost.dotCom) {
+        let enterprise = host != GitHubHost.dotCom
         state.settings.accounts.append(Account(
-            provider: .copilot, homePath: "~/.config/gh", label: Provider.copilot.displayName
+            provider: .copilot, homePath: "~/.config/gh",
+            label: enterprise ? "\(Provider.copilot.displayName) · \(host)" : Provider.copilot.displayName,
+            host: enterprise ? host : nil
         ))
+        state.refreshAll(force: true)
     }
 
     private func addAccount(_ provider: Provider) {
@@ -381,6 +391,43 @@ struct AccountsTab: View {
         state.settings.accounts.append(Account(
             provider: provider, homePath: path, label: AccountDetector.defaultLabel(provider, url.path)
         ))
+    }
+}
+
+/// Asks for the GitHub Enterprise Cloud domain; the GitHub CLI must be signed in to it.
+private struct GHEHostSheet: View {
+    var save: (String) -> Void
+    @State private var input = ""
+    @Environment(\.dismiss) private var dismiss
+
+    private var host: String? {
+        GitHubHost.normalize(input).flatMap { $0 == GitHubHost.dotCom ? nil : $0 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Copilot on GHE.com").font(.headline)
+            TextField("octocorp.ghe.com", text: $input)
+                .textFieldStyle(.roundedBorder)
+            Text(host.map { "Uses `gh auth login --hostname \($0)`. The token is sent only to api.\($0)." }
+                 ?? "Your company's GHE.com domain, or just its name. Self-hosted GitHub Enterprise Server has no Copilot quota to read.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Add") {
+                    if let host { save(host) }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(host == nil)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
     }
 }
 
@@ -434,7 +481,8 @@ struct AccountRow: View {
                 TextField("Label", text: $account.label)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
-                Text(account.provider == .openRouter ? "Key in Keychain" : Paths.abbreviate(account.homePath))
+                Text(account.provider == .openRouter ? "Key in Keychain"
+                     : account.host.map { "\(Paths.abbreviate(account.homePath)) · \($0)" } ?? Paths.abbreviate(account.homePath))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

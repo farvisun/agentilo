@@ -1,0 +1,7 @@
+{
+  "login": "octocat",
+  "copilot_plan": "free",
+  "limited_user_reset_date": "2026-12-01",
+  "limited_user_quotas": {"chat": 40, "completions": 1500},
+  "monthly_quotas": {"chat": 50, "completions": 2000}
+}
