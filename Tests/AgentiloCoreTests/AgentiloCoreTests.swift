@@ -1773,3 +1773,50 @@ final class HookInstallerSymlinkTests: XCTestCase {
         XCTAssertTrue(fm.fileExists(atPath: main.appendingPathComponent("settings.json.agentilo-bak").path))
     }
 }
+
+final class RefreshBackoffTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 2_000_000)
+
+    func testRetryAfterSecondsAndHTTPDate() {
+        XCTAssertEqual(HTTP.retryAfter("120", now: now), 120)
+        XCTAssertEqual(HTTP.retryAfter("99999", now: now), 3_600)
+        XCTAssertEqual(HTTP.retryAfter("Wed, 21 Oct 2015 07:28:00 GMT",
+                                       now: Date(timeIntervalSince1970: 1_445_412_400)), 80)
+        XCTAssertNil(HTTP.retryAfter(nil, now: now))
+        XCTAssertNil(HTTP.retryAfter("soon", now: now))
+    }
+
+    func testDoublesUpToAnHourAndManualRefreshSkipsOwnWait() {
+        var b: RefreshBackoff?
+        for _ in 0..<3 { b = RefreshBackoff.after(UsageError.http(503), previous: b, now: now) }
+        XCTAssertEqual(b?.failures, 3)
+        XCTAssertEqual(b?.retryAt, now.addingTimeInterval(240))
+        XCTAssertTrue(b!.holds(now: now, forced: false))
+        XCTAssertFalse(b!.holds(now: now, forced: true))
+        for _ in 0..<20 { b = RefreshBackoff.after(UsageError.http(503), previous: b, now: now) }
+        XCTAssertEqual(b?.retryAt, now.addingTimeInterval(3_600))
+        XCTAssertNil(RefreshBackoff.after(UsageError.tokenExpired("x"), previous: b, now: now))
+    }
+
+    func testProviderRequestedWaitHoldsEvenWhenForced() {
+        let b = RefreshBackoff.after(UsageError.rateLimited(retryAfter: 900), previous: nil, now: now)!
+        XCTAssertTrue(b.providerAsked)
+        XCTAssertEqual(b.retryAt, now.addingTimeInterval(900))
+        XCTAssertTrue(b.holds(now: now, forced: true))
+        XCTAssertFalse(b.holds(now: now.addingTimeInterval(901), forced: false))
+        // Without a Retry-After it is an ordinary backoff.
+        XCTAssertFalse(RefreshBackoff.after(UsageError.rateLimited(), previous: nil, now: now)!.providerAsked)
+    }
+
+    func testDeadlineGivesUp() async {
+        do {
+            _ = try await withDeadline(0.05) { try await Task.sleep(for: .seconds(5)); return 1 }
+            XCTFail("should time out")
+        } catch {
+            XCTAssertEqual(error as? UsageError, .timedOut(0.05))
+            XCTAssertEqual((error as? UsageError)?.errorDescription, "Refresh timed out after 0s")
+        }
+        let v = try? await withDeadline(1) { 7 }
+        XCTAssertEqual(v, 7)
+    }
+}

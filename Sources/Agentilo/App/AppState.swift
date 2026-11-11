@@ -91,8 +91,8 @@ final class AppState {
     @ObservationIgnored private var statsTask: Task<Void, Never>?
     @ObservationIgnored private var proxies: [Provider: EffectiveProxy] = [:]
     @ObservationIgnored private var proxyDebounce: Task<Void, Never>?
-    @ObservationIgnored private var failures: [UUID: Int] = [:]
-    @ObservationIgnored private var notBefore: [UUID: Date] = [:]
+    /// Accounts waiting before their next fetch; provider-requested waits survive a relaunch.
+    @ObservationIgnored private var backoffs: [UUID: RefreshBackoff] = BackoffStore.load()
     @ObservationIgnored private var lastFetch: [UUID: Date] = [:]
     @ObservationIgnored var agentLoop: Task<Void, Never>?
     @ObservationIgnored let hookToken = HookToken.ensure()
@@ -247,13 +247,16 @@ final class AppState {
         refreshStats()
     }
 
+    /// A refresh that takes longer than this is given up and counted as a failure.
+    nonisolated static let fetchDeadline: TimeInterval = 120
+
     func refreshAll(force: Bool) {
         for acct in limitAccounts { refresh(acct, force: force) }
     }
 
     func refresh(_ account: Account, force: Bool) {
         let id = account.id
-        if !force, let nb = notBefore[id], nb > Date() { return }
+        if let b = backoffs[id], b.holds(forced: force) { return }
         if statuses[id]?.loading == true { return }
         statuses[id, default: AccountStatus()].loading = true
         lastFetch[id] = Date()
@@ -265,7 +268,9 @@ final class AppState {
             let result: Result<StoredUsage, Error>
             var fallback: UsageSnapshot?
             do {
-                let snap = try await UsageProviders.provider(for: account.provider).fetch(account: account, session: session)
+                let snap = try await withDeadline(Self.fetchDeadline) {
+                    try await UsageProviders.provider(for: account.provider).fetch(account: account, session: session)
+                }
                 let cal = LocalUsage.calibrate(snap, account: account, engine: engine, previous: previous?.calibration ?? [:])
                 result = .success(StoredUsage(snapshot: snap, calibration: cal))
             } catch {
@@ -285,19 +290,24 @@ final class AppState {
         case .success(let usage):
             st.snapshot = usage.snapshot
             st.error = nil
-            failures[id] = 0
-            notBefore[id] = nil
+            if backoffs.removeValue(forKey: id)?.providerAsked == true { BackoffStore.save(backoffs) }
             stored[id] = usage
             stored = stored.filter { key, _ in settings.accounts.contains { $0.id == key } }
             SnapshotStore.save(stored)
         case .failure(let error):
             st.error = error.localizedDescription
             if let fallback { st.snapshot = fallback }
-            let transient = (error as? UsageError)?.isTransient ?? true
-            if transient {
-                let n = (failures[id] ?? 0) + 1
-                failures[id] = n
-                notBefore[id] = Date().addingTimeInterval(min(1_800, 30 * pow(2, Double(n))))
+            backoffs[id] = RefreshBackoff.after(error, previous: backoffs[id])
+            if let b = backoffs[id], b.providerAsked {
+                // Homes signed in to the same Claude login share its rate limit.
+                if let acct = settings.accounts.first(where: { $0.id == id }), acct.provider == .claude,
+                   let email = (old ?? st.snapshot)?.email {
+                    for other in settings.accounts where other.id != id && other.provider == .claude
+                        && statuses[other.id]?.snapshot?.email == email {
+                        backoffs[other.id] = b
+                    }
+                }
+                BackoffStore.save(backoffs)
             }
         }
         statuses[id] = st
