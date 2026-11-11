@@ -14,7 +14,9 @@
   const revealer = new IntersectionObserver((entries) => {
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); revealer.unobserve(e.target); }
   }, { rootMargin: "0px 0px -10% 0px" });
-  $$(".cards .card").forEach((el, i) => el.style.setProperty("--d", `${(i % 4) * 0.08}s`));
+  $$(".cards .card").forEach((el, i) => el.style.setProperty("--d", `${(i % 3) * 0.06}s`));
+  $$(".grid .feature").forEach((el, i) => el.style.setProperty("--d", `${(i % 4) * 0.06}s`));
+  $$(".faq-list details").forEach((el, i) => el.style.setProperty("--d", `${i * 0.04}s`));
   $$(".reveal").forEach((el) => revealer.observe(el));
 
   // ── The notch ────────────────────────────────────────────
@@ -140,7 +142,6 @@
   }
 
   // ── Scroll effects ───────────────────────────────────────
-  const wordmark = $(".wordmark span");
   let ticking = false;
   function onScroll() {
     if (ticking) return;
@@ -148,11 +149,6 @@
     requestAnimationFrame(() => {
       ticking = false;
       pickScene();
-      if (wordmark) {
-        const r = wordmark.getBoundingClientRect();
-        const sweep = 1.3 - (r.top / innerHeight) * 1.3;
-        wordmark.style.setProperty("--sweep", Math.max(-0.3, Math.min(1.3, sweep)).toFixed(3));
-      }
     });
   }
   // On phones, shrink the notch until its widest scene fits the screen.
@@ -166,18 +162,6 @@
   addEventListener("resize", () => { fitNotch(); onScroll(); });
   onScroll();
   render();
-
-  // ── Magnetic buttons ─────────────────────────────────────
-  if (finePointer && !reduced) {
-    for (const b of $$(".magnetic")) {
-      b.addEventListener("pointermove", (e) => {
-        const r = b.getBoundingClientRect();
-        b.style.setProperty("--mx", `${(e.clientX - r.left - r.width / 2) * 0.18}px`);
-        b.style.setProperty("--my", `${(e.clientY - r.top - r.height / 2) * 0.3}px`);
-      });
-      b.addEventListener("pointerleave", () => { b.style.setProperty("--mx", "0px"); b.style.setProperty("--my", "0px"); });
-    }
-  }
 
   // ── Pace playground: Pace.evaluate from AgentiloCore, verbatim ──
   const WINDOW = 300; // minutes
@@ -245,7 +229,8 @@
   };
   const iso = (ms) => new Date(Math.round(ms / 60e3) * 60e3).toISOString().replace(".000", "");
   const script = [
-    { cmd: "agentilo limits --short", out: `<span class="c">Claude S 38% W 64% · Codex S 22% W 81%! · Cursor M 75%</span>` },
+    { cmd: "agentilo limits --short", out: `<span class="c">Claude S 38% W 64% · Codex S 22% W 81%! · Cursor M 75% · OpenCode Go S 12% W 34%</span>` },
+    { cmd: "agentilo limits codex --short", out: `<span class="c">Codex S 22% W 81%!</span>` },
     {
       cmd: "curl -s 127.0.0.1:6737/v1/limits | jq '.accounts[1].windows[1]'",
       out: json({ kind: "weekly", title: "Weekly", usedPercent: 81, remainingPercent: 19, resetsAt: iso(codexReset.getTime()), pace: "runsOut", runsOutAt: iso(runOutAt.getTime()) }),
