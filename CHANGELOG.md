@@ -4,6 +4,19 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-11
+
+### Added
+
+- Agents are found in any terminal without herdr or hooks: Agentilo reads running Claude Code, Codex and Gemini CLI processes and their transcripts to show working and finished sessions (Settings → Agents → Detect agents from running processes, on by default). Hooks still add the current tool, approvals and questions.
+- On first launch after the update, Agentilo offers once to install hooks in homes that lack them. Settings → Agents → Hooks has an Install all button.
+
+### Fixed
+
+- Clicking an agent outside herdr brings forward the app it runs in (Ghostty, Otty, iTerm2, Terminal, VS Code, Cursor, …) instead of always Ghostty.
+- Installing hooks in a home whose `settings.json` or `hooks.json` is a symlink edits the linked file instead of replacing the link with a copy. Homes sharing one file show it in Settings.
+- A Codex session whose process exited no longer stays in the agent list for 30 minutes.
+
 ## [0.8.0] - 2026-11-04
 
 ### Added
@@ -85,7 +98,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 - The first release: Claude Code, Codex and Cursor plan limits beside the notch, paced, with alerts, live agent sessions from herdr and hooks, permission prompts answered from the notch, an activity page, a loopback API and the `agentilo` command.
 
-[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/farvisun/agentilo/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/farvisun/agentilo/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/farvisun/agentilo/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/farvisun/agentilo/compare/v0.6.0...v0.6.1
