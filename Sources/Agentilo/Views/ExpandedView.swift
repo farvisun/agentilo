@@ -23,7 +23,9 @@ struct ExpandedView: View {
                     AccountPage(
                         account: acct, status: state.status(acct), stats: state.stats,
                         mode: state.settings.displayMode, now: state.now,
-                        suggestion: state.suggestion(from: acct), terminal: state.settings.preferredTerminal
+                        suggestion: state.suggestion(from: acct), terminal: state.settings.preferredTerminal,
+                        nextCheck: state.nextCheck(for: acct.id), heldUntil: state.providerHolds(acct.id),
+                        refresh: { state.refresh(acct, force: true) }
                     )
                         .id(acct.id)
                 case .stats:
@@ -178,6 +180,10 @@ struct AccountPage: View {
     var now: Date
     var suggestion: AccountSuggestion? = nil
     var terminal: TerminalApp = .none
+    var nextCheck: Date? = nil
+    /// The provider asked to wait until then; checking sooner is not offered.
+    var heldUntil: Date? = nil
+    var refresh: () -> Void = {}
     @State private var copiedImage = false
 
     var body: some View {
@@ -256,10 +262,14 @@ struct AccountPage: View {
                     .help(err)
             }
             if let snap = status.snapshot {
-                Text(sourceText(snap))
-                    .font(.system(size: 10))
-                    .foregroundStyle(snap.source == .live ? Palette.tertiary : Palette.amber)
-                    .help(status.error ?? "")
+                Button(action: refresh) {
+                    Text(sourceText(snap))
+                        .font(.system(size: 10))
+                        .foregroundStyle(snap.source == .live ? Palette.tertiary : Palette.amber)
+                }
+                .buttonStyle(.plain)
+                .disabled(status.loading || heldUntil != nil)
+                .help(checkHelp)
             }
             if let snap = status.snapshot, !snap.windows.isEmpty {
                 Button {
@@ -300,6 +310,18 @@ struct AccountPage: View {
                     .foregroundStyle(Palette.tertiary)
             }
         }
+    }
+
+    private var checkHelp: String {
+        var lines: [String] = []
+        if let err = status.error { lines.append(err) }
+        if let held = heldUntil {
+            lines.append("\(account.provider.displayName) asked to wait; next check in \(Formatters.countdown(to: held, now: now))")
+        } else {
+            if let next = nextCheck, next > now { lines.append("Next check in \(Formatters.countdown(to: next, now: now))") }
+            lines.append("Click to check now")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func sourceText(_ snap: UsageSnapshot) -> String {

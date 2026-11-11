@@ -247,6 +247,20 @@ final class AppState {
         refreshStats()
     }
 
+    /// When the loop will next ask the provider: after the refresh interval, or later while backing off.
+    func nextCheck(for id: UUID) -> Date? {
+        guard let last = lastFetch[id] else { return nil }
+        let regular = last.addingTimeInterval(max(30, settings.refreshInterval))
+        guard let b = backoffs[id] else { return regular }
+        return max(regular, b.retryAt)
+    }
+
+    /// Whether the provider asked to be left alone until then, which a manual refresh respects.
+    func providerHolds(_ id: UUID) -> Date? {
+        guard let b = backoffs[id], b.providerAsked, b.retryAt > Date() else { return nil }
+        return b.retryAt
+    }
+
     /// A refresh that takes longer than this is given up and counted as a failure.
     nonisolated static let fetchDeadline: TimeInterval = 120
 
