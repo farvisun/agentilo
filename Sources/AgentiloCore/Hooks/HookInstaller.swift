@@ -32,6 +32,29 @@ public enum HookInstaller {
         }
     }
 
+    /// The file that really holds the hooks. Homes often link their config to a shared one;
+    /// editing the target keeps the link (an atomic write over the link would replace it).
+    public static func resolvedConfigURL(for account: Account) -> URL? {
+        configURL(for: account)?.resolvingSymlinksInPath()
+    }
+
+    /// An earlier account in the list whose config is the same file, so one install covers both.
+    public static func sharesConfig(_ account: Account, among accounts: [Account]) -> Account? {
+        guard let mine = resolvedConfigURL(for: account)?.path else { return nil }
+        return accounts.prefix { $0.id != account.id }.first { resolvedConfigURL(for: $0)?.path == mine }
+    }
+
+    /// Enabled homes whose hooks are missing or out of date, one per config file.
+    public static func missing(
+        accounts: [Account], executable: String, approvals: Bool, approvalTimeout: Int
+    ) -> [Account] {
+        var seen = Set<String>()
+        return accounts.filter { a in
+            guard a.enabled, let url = resolvedConfigURL(for: a), seen.insert(url.path).inserted else { return false }
+            return status(for: a, executable: executable, approvals: approvals, approvalTimeout: approvalTimeout) != .installed
+        }
+    }
+
     public static func events(for provider: Provider, approvals: Bool) -> [AgentEventKind] {
         switch provider {
         case .claude:
@@ -62,7 +85,7 @@ public enum HookInstaller {
         for account: Account, executable: String, approvals: Bool, approvalTimeout: Int = 60,
         fileManager fm: FileManager = .default
     ) -> Status {
-        guard let url = configURL(for: account) else { return .unsupported("Cursor has no hooks") }
+        guard let url = resolvedConfigURL(for: account) else { return .unsupported("Cursor has no hooks") }
         let root = (try? read(url)) ?? [:]
         let ours = entries(in: root)
         if ours.isEmpty { return .notInstalled }
@@ -94,7 +117,7 @@ public enum HookInstaller {
         for account: Account, executable: String, approvals: Bool, approvalTimeout: Int,
         fileManager fm: FileManager = .default
     ) throws {
-        guard let url = configURL(for: account) else { return }
+        guard let url = resolvedConfigURL(for: account) else { return }
         var root = try read(url)
         root = installed(
             in: removed(from: root), provider: account.provider, executable: executable,
@@ -105,7 +128,7 @@ public enum HookInstaller {
     }
 
     public static func uninstall(for account: Account, fileManager fm: FileManager = .default) throws {
-        guard let url = configURL(for: account), fm.fileExists(atPath: url.path) else { return }
+        guard let url = resolvedConfigURL(for: account), fm.fileExists(atPath: url.path) else { return }
         let root = try read(url)
         guard !commands(in: root).isEmpty else { return }
         try backup(url, fileManager: fm)
