@@ -22,6 +22,31 @@ extension Pace {
     }
 }
 
+private struct ConcealsNamesKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Account names and emails are blurred (the screen is shared or recorded).
+    var concealsNames: Bool {
+        get { self[ConcealsNamesKey.self] }
+        set { self[ConcealsNamesKey.self] = newValue }
+    }
+}
+
+/// Blurs an account name or email while the screen is shared or recorded.
+private struct Concealed: ViewModifier {
+    @Environment(\.concealsNames) private var conceals
+
+    func body(content: Content) -> some View {
+        content.blur(radius: conceals ? 4 : 0).animation(.easeInOut(duration: 0.2), value: conceals)
+    }
+}
+
+extension View {
+    func concealedName() -> some View { modifier(Concealed()) }
+}
+
 extension Provider {
     var tint: Color {
         switch self {

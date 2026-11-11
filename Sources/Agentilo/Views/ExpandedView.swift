@@ -253,6 +253,7 @@ struct AccountPage: View {
                     .foregroundStyle(Palette.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .concealedName()
             }
             if let plan = status.snapshot?.plan {
                 Text(plan)
@@ -364,9 +365,12 @@ private struct SwitchRow: View {
             Image(systemName: "arrow.triangle.swap")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(Palette.green)
-            Text("Switch to \(suggestion.to.label)")
+            Text("Switch to")
+                .font(.system(size: 11, weight: .medium))
+            Text(suggestion.to.label)
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
+                .concealedName()
             Text("\(Int((100 - suggestion.toUsed).rounded()))% left")
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundStyle(Palette.secondary)

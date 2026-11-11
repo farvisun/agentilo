@@ -153,6 +153,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var toggleHotKey: HotKey?
     /// Step aside, like for a full-screen app, while the screen is shared or recorded.
     public var hideWhileCaptured = false
+    /// Keep the notch, but blur account names and emails while the screen is shared or recorded.
+    public var blurNamesWhileCaptured = false
     public var pillWindow = PillWindow.mostCritical
     public var pillStyle = PillStyle.both
     /// Seconds each account stays in the rotating pill.
@@ -229,6 +231,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         expandTrigger = try c.decodeIfPresent(ExpandTrigger.self, forKey: .expandTrigger) ?? d.expandTrigger
         toggleHotKey = try c.decodeIfPresent(HotKey.self, forKey: .toggleHotKey)
         hideWhileCaptured = try c.decodeIfPresent(Bool.self, forKey: .hideWhileCaptured) ?? d.hideWhileCaptured
+        blurNamesWhileCaptured = try c.decodeIfPresent(Bool.self, forKey: .blurNamesWhileCaptured) ?? d.blurNamesWhileCaptured
         pillWindow = try c.decodeIfPresent(PillWindow.self, forKey: .pillWindow) ?? d.pillWindow
         pillStyle = try c.decodeIfPresent(PillStyle.self, forKey: .pillStyle) ?? d.pillStyle
         pillRotateInterval = try c.decodeIfPresent(Double.self, forKey: .pillRotateInterval) ?? d.pillRotateInterval

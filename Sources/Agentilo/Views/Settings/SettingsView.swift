@@ -29,6 +29,25 @@ struct GeneralTab: View {
     @Bindable var updater: Updater
     @State private var loginError: String?
 
+    /// 0 show, 1 blur names, 2 hide; stored as two flags so older settings keep working.
+    private var captureMode: Binding<Int> {
+        Binding(
+            get: { state.settings.hideWhileCaptured ? 2 : state.settings.blurNamesWhileCaptured ? 1 : 0 },
+            set: { mode in
+                state.settings.hideWhileCaptured = mode == 2
+                state.settings.blurNamesWhileCaptured = mode == 1
+            }
+        )
+    }
+
+    private var captureHelp: String {
+        switch captureMode.wrappedValue {
+        case 1: "Usage stays visible; account names and emails are blurred, and alerts leave them out."
+        case 2: "Hides the notch and holds alerts, like for a full-screen app. An app that captures the screen all the time keeps it hidden."
+        default: "A single screenshot cannot be detected; use the copy button for a picture without names."
+        }
+    }
+
     private let intervals: [(String, Double)] = [
         ("1 minute", 60), ("2 minutes", 120), ("5 minutes", 300), ("10 minutes", 600),
     ]
@@ -98,9 +117,13 @@ struct GeneralTab: View {
             }
             .pickerStyle(.segmented)
             Toggle("Show local token statistics", isOn: $state.settings.showTokenStats)
-            Toggle(isOn: $state.settings.hideWhileCaptured) {
-                Text("Hide while the screen is shared or recorded")
-                Text("Hides the notch and holds alerts, like for a full-screen app. An app that captures the screen all the time keeps it hidden.")
+            Picker(selection: captureMode) {
+                Text("Show as usual").tag(0)
+                Text("Blur account names").tag(1)
+                Text("Hide the notch").tag(2)
+            } label: {
+                Text("While the screen is shared or recorded")
+                Text(captureHelp)
             }
             Toggle("Launch at login", isOn: Binding(
                 get: { state.settings.launchAtLogin },

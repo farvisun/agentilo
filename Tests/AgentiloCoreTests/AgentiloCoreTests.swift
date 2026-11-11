@@ -1443,6 +1443,7 @@ final class QuickWinSettingsTests: XCTestCase {
         let s = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
         XCTAssertNil(s.toggleHotKey)
         XCTAssertFalse(s.hideWhileCaptured)
+        XCTAssertFalse(s.blurNamesWhileCaptured)
     }
 
     func testShortcutSurvivesSaving() throws {

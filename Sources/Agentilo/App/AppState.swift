@@ -69,6 +69,10 @@ final class AppState {
     var approvals: [PendingApproval] = []
     /// The notch is out of sight (an app is full screen on its display).
     var notchHidden = false
+    /// The screen is shared or recorded; only tracked while a capture setting is on.
+    var screenCaptured = false
+    /// Blur account names and emails in the notch right now.
+    var concealNames: Bool { settings.blurNamesWhileCaptured && screenCaptured }
     /// What sleep is held off right now (Settings → Agents → Keep awake).
     var keepAwakeLevel = KeepAwakeLevel.off
     var keepAwakeHelperInstalled = KeepAwakeHelper.isInstalled
@@ -343,7 +347,7 @@ final class AppState {
         if firedAlerts != before { AlertStore.save(firedAlerts) }
         let switchTo = suggestion(from: acct).map { "Switch: \($0.reason)" }
         for a in found {
-            var alert = NotchAlert(a, sound: settings.alertSound, now: now)
+            var alert = NotchAlert(a, sound: settings.alertSound, showsAccount: !concealNames, now: now)
             if a.kind != .reset, a.kind != .useItOrLoseIt { alert.body = switchTo }
             alerts.post(alert)
         }

@@ -55,6 +55,7 @@ struct NotchRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
+        .environment(\.concealsNames, state.concealNames)
     }
 }
 
@@ -146,6 +147,7 @@ private struct RotatingPill: View {
                         .foregroundStyle(Palette.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                        .concealedName()
                 }
             }
         }

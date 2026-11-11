@@ -146,8 +146,10 @@ final class NotchWindowController {
 
     private func updateVisibility() {
         guard let screen else { return }
-        let hide = FullscreenDetector.isFullscreen(screen)
-            || (state.settings.hideWhileCaptured && ScreenCaptureProbe.isCaptured)
+        let watch = state.settings.hideWhileCaptured || state.settings.blurNamesWhileCaptured
+        let captured = watch && ScreenCaptureProbe.isCaptured
+        if captured != state.screenCaptured { state.screenCaptured = captured }
+        let hide = FullscreenDetector.isFullscreen(screen) || (state.settings.hideWhileCaptured && captured)
         guard hide != steppedAside else { return }
         steppedAside = hide
         state.notchHidden = hide

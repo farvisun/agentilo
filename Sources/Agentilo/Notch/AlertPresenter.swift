@@ -101,7 +101,7 @@ extension NotchAlert {
         )
     }
 
-    init(_ alert: LimitAlert, sound: Bool, now: Date = Date()) {
+    init(_ alert: LimitAlert, sound: Bool, showsAccount: Bool = true, now: Date = Date()) {
         let color: Color
         let tone: String
         switch alert.kind {
@@ -115,7 +115,7 @@ extension NotchAlert {
         self.init(
             provider: alert.provider,
             title: alert.title,
-            message: "\(alert.message(now: now)) · \(alert.accountLabel)",
+            message: showsAccount ? "\(alert.message(now: now)) · \(alert.accountLabel)" : alert.message(now: now),
             color: color,
             sound: sound ? tone : nil,
             urgent: alert.kind == .limitReached
