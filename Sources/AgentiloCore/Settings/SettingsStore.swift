@@ -164,6 +164,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Usage percentages that drop an alert out of the notch; 100 means "limit reached".
     public var alertThresholds = [75, 90, 100]
     public var resetAlerts = true
+    /// Warn when the pace runs a window out before its reset, while usage is still below every threshold.
+    public var burningFastAlerts = true
+    /// Warn when a window longer than a day resets within 24 hours with more than half left.
+    public var useItOrLoseItAlerts = true
     public var alertSound = true
     /// Serve limits on 127.0.0.1 for agents, status lines and the CLI.
     public var apiEnabled = true
@@ -233,6 +237,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         alertsEnabled = try c.decodeIfPresent(Bool.self, forKey: .alertsEnabled) ?? d.alertsEnabled
         alertThresholds = try c.decodeIfPresent([Int].self, forKey: .alertThresholds) ?? d.alertThresholds
         resetAlerts = try c.decodeIfPresent(Bool.self, forKey: .resetAlerts) ?? d.resetAlerts
+        burningFastAlerts = try c.decodeIfPresent(Bool.self, forKey: .burningFastAlerts) ?? d.burningFastAlerts
+        useItOrLoseItAlerts = try c.decodeIfPresent(Bool.self, forKey: .useItOrLoseItAlerts) ?? d.useItOrLoseItAlerts
         alertSound = try c.decodeIfPresent(Bool.self, forKey: .alertSound) ?? d.alertSound
         apiEnabled = try c.decodeIfPresent(Bool.self, forKey: .apiEnabled) ?? d.apiEnabled
         apiPort = try c.decodeIfPresent(Int.self, forKey: .apiPort) ?? d.apiPort

@@ -394,6 +394,8 @@ final class ProxyTests: XCTestCase {
         XCTAssertTrue(s.accountSuggestions)
         XCTAssertEqual(s.preferredTerminal, .none)
         XCTAssertTrue(s.weeklySummary)
+        XCTAssertTrue(s.burningFastAlerts)
+        XCTAssertTrue(s.useItOrLoseItAlerts)
         // A terminal this build does not know falls back instead of failing the whole file.
         let odd = try JSONDecoder().decode(AppSettings.self, from: Data("{\"preferredTerminal\": \"warp\"}".utf8))
         XCTAssertEqual(odd.preferredTerminal, .none)
@@ -574,6 +576,61 @@ final class AlertEngineTests: XCTestCase {
         var fired: [String: Date] = [:]
         _ = run(nil, snap(80), &fired)
         XCTAssertEqual(run(snap(80), snap(81, reset: 3_600.4), &fired), [])
+    }
+
+    private func pace(_ old: UsageSnapshot?, _ new: UsageSnapshot, _ fired: inout [String: Date]) -> [LimitAlert.Kind] {
+        AlertEngine.evaluate(previous: old, current: new, account: account, thresholds: [75, 90, 100],
+                             resetAlerts: true, burningFast: true, useItOrLoseIt: true,
+                             fired: &fired, now: now).map(\.kind)
+    }
+
+    /// A 5-hour window one hour in (20% elapsed).
+    private func early(_ used: Double) -> UsageSnapshot { snap(used, reset: 4 * 3_600) }
+
+    func testBurningFastFiresOnceAndRearmsWhenBackOnTrack() {
+        var fired: [String: Date] = [:]
+        XCTAssertEqual(pace(nil, early(20), &fired), [])
+        XCTAssertEqual(pace(early(20), early(50), &fired), [.burningFast])
+        XCTAssertEqual(pace(early(50), early(55), &fired), [])
+        // Back on track (usage dropped, e.g. a correction), then a new burst warns again.
+        XCTAssertEqual(pace(early(55), early(10), &fired), [])
+        XCTAssertEqual(pace(early(10), early(50), &fired), [.burningFast])
+    }
+
+    func testBurningFastLeavesThresholdsToThresholdAlerts() {
+        var fired: [String: Date] = [:]
+        XCTAssertEqual(pace(early(50), early(80), &fired), [.threshold(75)])
+        let off = AlertEngine.evaluate(previous: early(20), current: early(50), account: account,
+                                       thresholds: [75, 90, 100], resetAlerts: true,
+                                       fired: &fired, now: now)
+        XCTAssertTrue(off.isEmpty)
+    }
+
+    private func weekly(_ used: Double, reset: TimeInterval) -> UsageSnapshot {
+        UsageSnapshot(windows: [
+            UsageWindow(id: "weekly", kind: .weekly, title: "Weekly", usedPercent: used,
+                        resetsAt: now.addingTimeInterval(reset), windowLength: 7 * 86_400),
+        ])
+    }
+
+    func testUseItOrLoseItWithinADayOfResetOnce() {
+        var fired: [String: Date] = [:]
+        XCTAssertEqual(pace(nil, weekly(30, reset: 30 * 3_600), &fired), [])
+        XCTAssertEqual(pace(nil, weekly(30, reset: 20 * 3_600), &fired), [.useItOrLoseIt])
+        XCTAssertEqual(pace(nil, weekly(31, reset: 20 * 3_600), &fired), [])
+        // Half or more used: nothing.
+        var other: [String: Date] = [:]
+        XCTAssertEqual(pace(nil, weekly(50, reset: 20 * 3_600), &other), [])
+    }
+
+    func testUseItOrLoseItSkipsSessionsAndBilling() {
+        var fired: [String: Date] = [:]
+        XCTAssertEqual(pace(nil, snap(5, reset: 600), &fired), [])
+        let bill = UsageSnapshot(windows: [
+            UsageWindow(id: "extra", kind: .billing, title: "Extra usage", usedPercent: 5,
+                        resetsAt: now.addingTimeInterval(3_600), windowLength: 30 * 86_400),
+        ])
+        XCTAssertEqual(pace(nil, bill, &fired), [])
     }
 }
 

@@ -109,6 +109,8 @@ extension NotchAlert {
         case .threshold: (color, tone) = (Palette.amber, "Pop")
         case .limitReached: (color, tone) = (Palette.red, "Basso")
         case .reset: (color, tone) = (Palette.green, "Glass")
+        case .burningFast: (color, tone) = (Palette.amber, "Pop")
+        case .useItOrLoseIt: (color, tone) = (Palette.green, "Tink")
         }
         self.init(
             provider: alert.provider,

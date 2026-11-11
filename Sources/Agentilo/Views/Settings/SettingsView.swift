@@ -158,6 +158,10 @@ struct AlertsTab: View {
                     Toggle(t == 100 ? "100% (limit reached)" : "\(t)%", isOn: threshold(t))
                 }
                 Toggle("Tell me when a window resets", isOn: $state.settings.resetAlerts)
+                Toggle("Warn when the pace runs a limit out before it resets", isOn: $state.settings.burningFastAlerts)
+                    .help("Even below 75%. Once per window, again only after the pace is back on track.")
+                Toggle("Remind me when a weekly limit resets mostly unused", isOn: $state.settings.useItOrLoseItAlerts)
+                    .help("A window longer than a day that resets within 24 hours with more than half left.")
                 Toggle("Sum up last week on Monday morning", isOn: $state.settings.weeklySummary)
             }
             .disabled(!state.settings.alertsEnabled)

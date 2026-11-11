@@ -313,13 +313,14 @@ final class AppState {
         let found = AlertEngine.evaluate(
             previous: old, current: new, account: acct,
             thresholds: settings.alertThresholds, resetAlerts: settings.resetAlerts,
+            burningFast: settings.burningFastAlerts, useItOrLoseIt: settings.useItOrLoseItAlerts,
             fired: &firedAlerts, now: now
         )
         if firedAlerts != before { AlertStore.save(firedAlerts) }
         let switchTo = suggestion(from: acct).map { "Switch: \($0.reason)" }
         for a in found {
             var alert = NotchAlert(a, sound: settings.alertSound, now: now)
-            if a.kind != .reset { alert.body = switchTo }
+            if a.kind != .reset, a.kind != .useItOrLoseIt { alert.body = switchTo }
             alerts.post(alert)
         }
     }
