@@ -1820,3 +1820,32 @@ final class RefreshBackoffTests: XCTestCase {
         XCTAssertEqual(v, 7)
     }
 }
+
+final class LimitsPayloadFilterTests: XCTestCase {
+    let now = Date(timeIntervalSince1970: 2_000_000)
+
+    private func payload() -> LimitsPayload {
+        let a = Account(provider: .claude, homePath: "~/.claude", label: "me@work")
+        let b = Account(provider: .codex, homePath: "~/.codex", label: "me@home")
+        let fresh = UsageSnapshot(windows: [], fetchedAt: now.addingTimeInterval(-60))
+        let old = UsageSnapshot(windows: [], fetchedAt: now.addingTimeInterval(-600))
+        return LimitsPayload.build(accounts: [a, b], snapshots: [a.id: fresh, b.id: old], includeLabels: true,
+                                   origin: "app", refreshInterval: 120, now: now)
+    }
+
+    func testStaleAfterTwoRefreshIntervals() {
+        let p = payload()
+        XCTAssertEqual(p.accounts.map(\.stale), [false, true])
+        XCTAssertEqual(p.accounts[0].expiresAt, now.addingTimeInterval(-60 + 240))
+    }
+
+    func testFilterByProviderLabelOrId() throws {
+        let p = payload()
+        XCTAssertEqual(p.filtered("codex")?.accounts.map(\.provider), [.codex])
+        XCTAssertEqual(p.filtered("Claude")?.accounts.map(\.provider), [.claude])
+        XCTAssertEqual(p.filtered("me@home")?.accounts.map(\.provider), [.codex])
+        let id = String(p.accounts[0].id.uuidString.prefix(6))
+        XCTAssertEqual(p.filtered(id)?.accounts.count, 1)
+        XCTAssertNil(p.filtered("gemini"))
+    }
+}

@@ -497,6 +497,7 @@ final class AppState {
             includeLabels: settings.apiIncludeLabels,
             origin: "app",
             keepAwake: keepAwakeLevel,
+            refreshInterval: settings.refreshInterval,
             now: Date()
         )
     }

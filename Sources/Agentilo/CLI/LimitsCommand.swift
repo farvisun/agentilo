@@ -1,13 +1,15 @@
 import AgentiloCore
 import Foundation
 
-/// `agentilo limits [--json|--short] [--force]`: the limits the app knows, for scripts,
+/// `agentilo limits [account] [--json|--short] [--force]`: the limits the app knows, for scripts,
 /// agents and status lines. Asks the running app; without it, falls back to the cached
 /// snapshots on disk, so it never blocks on a provider.
 enum LimitsCommand {
     static let usage = """
-    usage: agentilo limits [--json | --short] [--force]
+    usage: agentilo limits [account] [--json | --short] [--force]
 
+      account   only this provider (claude, codex, cursor, gemini, copilot, openRouter,
+                opencode), account label, or the start of an account id
       --json    machine-readable output (stable, versioned)
       --short   one line for a status bar, e.g. "Claude S 16% W 7% · Codex S 12% W 61%"
                 (ends in "· awake" while Keep awake holds the Mac awake)
@@ -19,9 +21,19 @@ enum LimitsCommand {
             print(usage)
             return 0
         }
+        let names = args.filter { !$0.hasPrefix("-") }
+        guard names.count <= 1 else {
+            FileHandle.standardError.write(Data("agentilo limits: one account at a time\n\n\(usage)\n".utf8))
+            return 2
+        }
         let settings = SettingsStore.load()
         let force = args.contains("--force")
-        let payload = await fromApp(settings: settings, force: force) ?? fromCache(settings: settings)
+        let all = await fromApp(settings: settings, force: force) ?? fromCache(settings: settings)
+        guard let payload = names.first.map(all.filtered) ?? all else {
+            let known = Set(all.accounts.map { $0.provider.rawValue }).sorted().joined(separator: ", ")
+            FileHandle.standardError.write(Data("agentilo limits: no account matches \"\(names[0])\" (tracked: \(known.isEmpty ? "none" : known))\n".utf8))
+            return 2
+        }
 
         if args.contains("--json") {
             let data = (try? APIJSON.encoder.encode(payload)) ?? Data()
@@ -59,7 +71,8 @@ enum LimitsCommand {
             return s
         }
         return LimitsPayload.build(
-            accounts: accounts, snapshots: snaps, includeLabels: settings.apiIncludeLabels, origin: "cache", now: now
+            accounts: accounts, snapshots: snaps, includeLabels: settings.apiIncludeLabels, origin: "cache",
+            refreshInterval: settings.refreshInterval, now: now
         )
     }
 
@@ -70,10 +83,15 @@ enum LimitsCommand {
             var head = "\(a.provider.displayName)  \(a.label)"
             if let plan = a.plan { head += "  (\(plan))" }
             if let source = a.source, source != .live { head += "  [\(source.rawValue)]" }
+            if a.stale == true, p.origin == "app" { head += "  [stale]" }
             print(head)
             if a.windows.isEmpty { print("  \(a.error ?? "no limits known")") }
             for w in a.windows {
                 var line = "  \(w.title.padding(toLength: 18, withPad: " ", startingAt: 0))"
+                if w.kind == .balance {
+                    print(line + (w.detail ?? ""))
+                    continue
+                }
                 line += "\(String(format: "%5.1f", w.usedPercent))%"
                 if let reset = w.resetsAt {
                     line += "  resets \(Formatters.resetTime(reset, now: now)) (\(Formatters.countdown(to: reset, now: now)))"
