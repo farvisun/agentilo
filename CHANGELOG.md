@@ -4,6 +4,26 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Burning fast alert: when the pace runs a window out before its reset while usage is still below every threshold. Once per window, again only after the pace is back on track. Settings → Alerts, on by default.
+- Use it or lose it alert: a window longer than a day that resets within 24 hours with more than half left. Settings → Alerts, on by default.
+- Codex Spark session and weekly limits, the credit balance (with its approximate dollar value) and a workspace credit limit when one is set.
+- Cursor shows the plan's split between Cursor's own models and other models, and the team's on-demand spend when the limit is the team's.
+- Copilot on GitHub Enterprise Cloud (GHE.com), Copilot Free quotas, and extra premium requests when the plan allows them.
+- OpenCode Go session, weekly and monthly limits, read with the key the OpenCode CLI keeps in `~/.local/share/opencode/auth.json`. Detected automatically.
+- Several Claude or Codex accounts can share one page in the notch, each limit averaged over the accounts; hover a limit for each account (Settings → Accounts).
+- While the screen is shared or recorded, Agentilo can blur account names and emails instead of hiding the notch (Settings → General).
+- Right-click a provider's icon in the notch for its status page and usage dashboard.
+- Click the "updated" time on an account page to check now; its tooltip shows when the next check is due.
+- `agentilo limits <provider|label|id>` shows one account; `/v1/limits` and `--json` add `expiresAt` and `stale` per account.
+- Limits past the third and balances are listed on one line under the meters, so Claude's model limits and extra usage are no longer cut off.
+
+### Changed
+
+- A provider's `Retry-After` is honoured, also by a manual refresh, and survives a relaunch; Claude homes signed in to the same login share it. GitHub's 403 rate limit counts as one. Backoff now grows up to an hour.
+- A refresh that takes longer than 120 seconds is given up and retried later.
+
 ## [0.8.1] - 2026-11-11
 
 ### Added
