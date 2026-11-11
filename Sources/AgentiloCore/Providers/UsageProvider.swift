@@ -40,6 +40,7 @@ public enum UsageProviders {
         case .gemini: GeminiProvider()
         case .copilot: CopilotProvider()
         case .openRouter: OpenRouterProvider()
+        case .opencode: OpenCodeProvider()
         }
     }
 }

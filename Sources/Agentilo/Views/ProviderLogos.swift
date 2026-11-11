@@ -20,6 +20,7 @@ enum ProviderLogos {
 
     /// Monochrome, like Cursor's.
     static let openRouter = ##"<svg width="24" height="24" fill="#000000" fill-rule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18.654 3.87a5.087 5.087 0 1 1 0 10.174L23.7 19.09c.64.641.187 1.737-.72 1.737H8.48a8.479 8.479 0 0 1 0 -16.958h10.175zM8.479 7.26a5.087 5.087 0 1 0 0 10.176 5.087 5.087 0 0 0 0 -10.175z"/></svg>"##
+    static let opencode = ##"<svg width="24" height="24" fill="#000000" fill-rule="evenodd" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16 6H8v12h8V6zm4 16H4V2h16v20z"/></svg>"##
 
     private static var cache: [Provider: NSImage] = [:]
 
@@ -34,9 +35,10 @@ enum ProviderLogos {
         case .gemini: svg = gemini
         case .copilot: svg = copilot
         case .openRouter: svg = openRouter
+        case .opencode: svg = opencode
         }
         let img = NSImage(data: Data(svg.utf8)) ?? NSImage()
-        img.isTemplate = [.cursor, .copilot, .openRouter].contains(provider)
+        img.isTemplate = [.cursor, .copilot, .openRouter, .opencode].contains(provider)
         cache[provider] = img
         return img
     }

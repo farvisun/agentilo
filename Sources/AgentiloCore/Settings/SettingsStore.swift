@@ -343,6 +343,9 @@ public enum AccountDetector {
         // Gemini CLI: ~/.gemini once signed in.
         let gemini = "\(home)/.gemini"
         if isDir(gemini), GeminiCredentials.exists(home: gemini) { add(.gemini, gemini) }
+
+        // OpenCode Go: the CLI's own API key, in its auth.json.
+        if OpenCodeProvider.key(home: OpenCodeProvider.defaultHome) != nil { add(.opencode, OpenCodeProvider.defaultHome) }
         return found
     }
 
@@ -362,7 +365,7 @@ public enum AccountDetector {
             return "Cursor"
         case .gemini:
             return GeminiCredentials.email(home: path) ?? "Gemini"
-        case .copilot, .openRouter:
+        case .copilot, .openRouter, .opencode:
             return provider.displayName
         }
         return (path as NSString).lastPathComponent

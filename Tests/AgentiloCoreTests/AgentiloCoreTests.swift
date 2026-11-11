@@ -134,6 +134,21 @@ final class ProviderParsingTests: XCTestCase {
         XCTAssertEqual(snap.plan, "Enterprise")
     }
 
+    func testOpenCodeGoWindowsAndPlaceholderReset() throws {
+        let json = try fixtureJSON("opencode_usage.json")
+        // 12:00 UTC: the idle rolling window says "now + 5h", a placeholder.
+        let noon = DateParsing.iso("2026-11-11T12:00:00Z")!
+        let snap = try OpenCodeProvider.parse(json, now: noon)
+        XCTAssertEqual(snap.windows.map(\.title), ["Session", "Weekly", "Monthly"])
+        XCTAssertNil(snap.windows[0].resetsAt)
+        XCTAssertEqual(snap.windows[1].usedPercent, 34)
+        XCTAssertEqual(snap.windows[2].kind, .billing)
+        // Later the same answer is a real reset.
+        let later = try OpenCodeProvider.parse(json, now: noon.addingTimeInterval(3_600))
+        XCTAssertNotNil(later.windows[0].resetsAt)
+        XCTAssertThrowsError(try OpenCodeProvider.parse(["error": ["type": "x"]]))
+    }
+
     func testISODateWithMicroseconds() {
         let d = DateParsing.iso("2026-10-22T13:10:00.489653+00:00")
         XCTAssertNotNil(d)
@@ -1500,7 +1515,7 @@ final class NewProviderTests: XCTestCase {
     }
 
     func testNewProvidersHaveNoLogsHooksOrSwitchCommand() {
-        for provider in [Provider.copilot, .openRouter] {
+        for provider in [Provider.copilot, .openRouter, .opencode] {
             let account = Account(provider: provider, homePath: provider == .copilot ? "~/.config/gh" : "", label: "x")
             XCTAssertNil(StatsEngine.logRoot(provider, home: "/tmp"))
             XCTAssertNil(HookInstaller.configURL(for: account))
@@ -1532,7 +1547,7 @@ final class NewProviderTests: XCTestCase {
 
     func testDetectNeverAddsCopilotOrOpenRouter() {
         let found = AccountDetector.detect(existing: [])
-        XCTAssertFalse(found.contains { !$0.provider.switchesAccounts })
+        XCTAssertFalse(found.contains { [.copilot, .openRouter].contains($0.provider) })
     }
 }
 

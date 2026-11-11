@@ -31,6 +31,7 @@ extension Provider {
         case .gemini: Color(red: 0.19, green: 0.53, blue: 1.00)
         case .copilot: Color(red: 0.62, green: 0.48, blue: 0.95)
         case .openRouter: Color(red: 0.40, green: 0.72, blue: 0.68)
+        case .opencode: Color(red: 0.85, green: 0.85, blue: 0.85)
         }
     }
 }

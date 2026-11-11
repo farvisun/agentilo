@@ -307,6 +307,14 @@ struct AccountsTab: View {
                             Button("Copilot (GitHub CLI login)") { addCopilot() }
                             Button("Copilot on GHE.com…") { gheSheet = true }
                         case .openRouter: Button("OpenRouter key…") { keySheet = APIKeyTarget(account: nil) }
+                        case .opencode:
+                            Button("OpenCode Go (CLI key)") {
+                                state.settings.accounts.append(Account(
+                                    provider: .opencode, homePath: OpenCodeProvider.defaultHome,
+                                    label: Provider.opencode.displayName
+                                ))
+                                state.refreshAll(force: true)
+                            }
                         default: Button("\(p.displayName) home…") { addAccount(p) }
                         }
                     }
@@ -383,7 +391,7 @@ struct AccountsTab: View {
         case .claude: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         case .codex: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         case .cursor: panel.directoryURL = URL(fileURLWithPath: CursorCredentials.defaultHome)
-        case .gemini, .copilot, .openRouter: panel.directoryURL = URL(fileURLWithPath: Paths.home)
+        case .gemini, .copilot, .openRouter, .opencode: panel.directoryURL = URL(fileURLWithPath: Paths.home)
         }
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let url = panel.url else { return }

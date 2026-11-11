@@ -7,6 +7,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
     case gemini
     case copilot
     case openRouter
+    case opencode
 
     public var id: String { rawValue }
 
@@ -18,6 +19,7 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         case .gemini: "Gemini"
         case .copilot: "Copilot"
         case .openRouter: "OpenRouter"
+        case .opencode: "OpenCode Go"
         }
     }
 
@@ -30,11 +32,12 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         case .gemini: URL(string: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")!
         case .copilot: CopilotProvider.endpoint
         case .openRouter: OpenRouterProvider.keyEndpoint
+        case .opencode: OpenCodeProvider.endpoint
         }
     }
 
     /// Whether another account of this provider can be started from a command, so suggesting one helps.
-    public var switchesAccounts: Bool { ![.copilot, .openRouter].contains(self) }
+    public var switchesAccounts: Bool { ![.copilot, .openRouter, .opencode].contains(self) }
 }
 
 /// One signed-in agent home. Each home is its own account with its own limits,

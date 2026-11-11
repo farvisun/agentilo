@@ -56,7 +56,7 @@ public enum AccountAdvisor {
             return home == Paths.expand("~/.codex") ? "codex" : "CODEX_HOME=\(shellPath(home)) codex"
         case .gemini:
             return home == Paths.expand("~/.gemini") ? "gemini" : nil
-        case .cursor, .copilot, .openRouter:
+        case .cursor, .copilot, .openRouter, .opencode:
             return nil
         }
     }

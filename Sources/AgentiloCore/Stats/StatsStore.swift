@@ -274,7 +274,7 @@ public final class StatsEngine: @unchecked Sendable {
             case .claude: ClaudeLogParser.parse(data, into: &agg)
             case .codex: CodexLogParser.parse(data, into: &agg)
             case .gemini: GeminiLogParser.parse(data, into: &agg)
-            case .cursor, .copilot, .openRouter: data.count
+            case .cursor, .copilot, .openRouter, .opencode: data.count
             }
             agg.parsedBytes = offset + Int64(consumed)
         } catch {
@@ -369,7 +369,7 @@ public final class StatsEngine: @unchecked Sendable {
         case .claude: home + "/projects"
         case .codex: home + "/sessions"
         case .gemini: home + "/tmp"
-        case .cursor, .copilot, .openRouter: nil
+        case .cursor, .copilot, .openRouter, .opencode: nil
         }
     }
 
