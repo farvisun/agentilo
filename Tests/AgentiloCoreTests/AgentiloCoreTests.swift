@@ -1470,3 +1470,178 @@ final class ResetGrantTests: XCTestCase {
         XCTAssertEqual(LocalUsage.codex(sample, base: base).resetGrants, ResetGrants(available: 1))
     }
 }
+
+final class LocalAgentTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 4_000_000)
+
+    private func local(_ activity: LocalAgent.Activity, pid: Int32 = 42, sid: String = "s1", pane: String? = nil) -> LocalAgent {
+        LocalAgent(agent: "claude", pid: pid, sessionID: sid, cwd: "/p/web", activity: activity,
+                   terminalBundleID: "dev.motty.Motty", herdrPane: pane, transcriptPath: "/t/\(sid).jsonl")
+    }
+
+    func testParsesProcArgs() throws {
+        var data = Data()
+        var argc: Int32 = 3
+        data.append(Data(bytes: &argc, count: 4))
+        let body = "/usr/local/bin/node\0\0\0\0node\0/opt/lib/@google/gemini-cli/dist/index.js\0\0"
+            + "HOME=/Users/u\0__CFBundleIdentifier=com.mitchellh.ghostty\0A=b=c\0\0\0junk\0"
+        data.append(Data(body.utf8))
+        let (argv, env) = try XCTUnwrap(ProcessScanner.parseProcArgs(data))
+        XCTAssertEqual(argv, ["node", "/opt/lib/@google/gemini-cli/dist/index.js", ""])
+        XCTAssertEqual(env["__CFBundleIdentifier"], "com.mitchellh.ghostty")
+        XCTAssertEqual(env["A"], "b=c")
+        XCTAssertNil(env["junk"])
+    }
+
+    func testRecognizesAgentCommandLines() {
+        XCTAssertEqual(ProcessScanner.provider(argv: ["/Users/u/.local/bin/claude", "--resume"], comm: "claude"), .claude)
+        XCTAssertEqual(ProcessScanner.provider(argv: ["/Users/u/.local/share/claude/versions/2.1.3"], comm: "2.1.3"), .claude)
+        XCTAssertEqual(ProcessScanner.provider(argv: ["codex"], comm: "codex"), .codex)
+        XCTAssertEqual(ProcessScanner.provider(argv: ["node", "/x/@anthropic-ai/claude-code/cli.js"], comm: "node"), .claude)
+        XCTAssertEqual(ProcessScanner.provider(argv: ["node", "/x/@openai/codex/bin/codex.js"], comm: "node"), .codex)
+        XCTAssertNil(ProcessScanner.provider(argv: ["node", "/Users/u/.claude/plugins/cache/x/start.mjs"], comm: "node"))
+        XCTAssertNil(ProcessScanner.provider(argv: ["/Applications/Agentilo.app/Contents/MacOS/Agentilo", "hook"], comm: "Agentilo"))
+        XCTAssertTrue(ProcessScanner.couldBeAgent("2.1.322"))
+        XCTAssertFalse(ProcessScanner.couldBeAgent("zsh"))
+    }
+
+    func testClaudeTranscriptActivity() {
+        let prompt = #"{"type":"user","message":{"role":"user","content":"fix it"}}"#
+        let toolUse = #"{"type":"assistant","message":{"stop_reason":"tool_use","content":[{"type":"tool_use"}]}}"#
+        let result = #"{"type":"user","message":{"content":[{"type":"tool_result"}]}}"#
+        let reply = #"{"type":"assistant","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}}"#
+        let tail = #"{"type":"system","subtype":"turn_duration"}"# + "\n" + #"{"type":"cost-state"}"# + "\n" + #"{"type":"last-prompt"}"#
+        let meta = #"{"type":"user","isMeta":true,"message":{"content":"caveat"}}"#
+        let stop = #"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#
+        XCTAssertEqual(TranscriptActivity.claude([prompt].joined(separator: "\n")), .working)
+        XCTAssertEqual(TranscriptActivity.claude([prompt, toolUse].joined(separator: "\n")), .working)
+        XCTAssertEqual(TranscriptActivity.claude([toolUse, result, #"{"type":"attachment"}"#].joined(separator: "\n")), .working)
+        XCTAssertEqual(TranscriptActivity.claude([prompt, reply].joined(separator: "\n")), .finished)
+        XCTAssertEqual(TranscriptActivity.claude([prompt, reply, tail].joined(separator: "\n")), .finished)
+        XCTAssertEqual(TranscriptActivity.claude([reply, meta].joined(separator: "\n")), .finished)
+        XCTAssertEqual(TranscriptActivity.claude([toolUse, stop].joined(separator: "\n")), .finished)
+        XCTAssertNil(TranscriptActivity.claude(#"{"type":"last-prompt"}"#))
+    }
+
+    func testCodexTranscriptActivity() {
+        let started = #"{"type":"event_msg","payload":{"type":"task_started"}}"#
+        let tool = #"{"type":"response_item","payload":{"type":"custom_tool_call"}}"#
+        let count = #"{"type":"event_msg","payload":{"type":"token_count"}}"#
+        let complete = #"{"type":"event_msg","payload":{"type":"task_complete"}}"#
+        XCTAssertEqual(TranscriptActivity.codex([started, tool, count].joined(separator: "\n")), .working)
+        XCTAssertEqual(TranscriptActivity.codex([started, tool, complete, #"{"type":"token_usage_record"}"#].joined(separator: "\n")), .finished)
+    }
+
+    func testTranscriptNames() {
+        XCTAssertEqual(TranscriptLocator.claudeProjectDir("/Users/u/Projects/my.app_x"), "-Users-u-Projects-my-app-x")
+        let rollout = URL(fileURLWithPath: "/h/rollout-2026-11-11T13-18-13-01a1ca02-03b9-7ab3-b5f6-50c051dd933e.jsonl")
+        XCTAssertEqual(TranscriptLocator.sessionID(of: rollout, provider: .codex), "01a1ca02-03b9-7ab3-b5f6-50c051dd933e")
+        XCTAssertEqual(TranscriptLocator.sessionID(of: URL(fileURLWithPath: "/p/abc.jsonl"), provider: .claude), "abc")
+    }
+
+    func testFindsClaudeTranscriptStartedAfterTheProcess() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let dir = home.appendingPathComponent("projects/-p-web")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let old = dir.appendingPathComponent("old.jsonl"), now = dir.appendingPathComponent("new.jsonl")
+        try Data().write(to: old)
+        try Data().write(to: now)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: old.path)
+        let p = AgentProcess(pid: 1, ppid: 0, provider: .claude, started: Date().addingTimeInterval(-60), cwd: "/p/web",
+                             environment: ["CLAUDE_CONFIG_DIR": home.path])
+        XCTAssertEqual(TranscriptLocator.transcript(for: p, excluding: [])?.lastPathComponent, "new.jsonl")
+        XCTAssertNil(TranscriptLocator.transcript(for: p, excluding: [now.path]))
+    }
+
+    func testLocalScanDrivesStateAndEndsWithTheProcess() {
+        var store = AgentSessionStore()
+        let first = store.applyLocal([local(.working)], livePIDs: [42], herdrActive: false, now: t0)
+        XCTAssertNil(first.first?.from)
+        let s = store.sessions["claude:s1"]!
+        XCTAssertEqual(s.state, .working)
+        XCTAssertEqual(s.terminalBundleID, "dev.motty.Motty")
+        XCTAssertEqual(s.pid, 42)
+
+        let done = store.applyLocal([local(.finished)], livePIDs: [42], herdrActive: false, now: t0.addingTimeInterval(30))
+        XCTAssertEqual(done.map(\.to), [.done])
+        XCTAssertEqual(done.first?.from, .working)
+        XCTAssertEqual(store.applyLocal([local(.finished)], livePIDs: [42], herdrActive: false, now: t0.addingTimeInterval(35)), [])
+
+        // A transcript that cannot be read for a moment does not end a live session.
+        store.applyLocal([], livePIDs: [42], herdrActive: false, now: t0.addingTimeInterval(40))
+        XCTAssertNotNil(store.sessions["claude:s1"])
+        store.applyLocal([], livePIDs: [], herdrActive: false, now: t0.addingTimeInterval(45))
+        XCTAssertTrue(store.sessions.isEmpty)
+    }
+
+    func testClearStartsANewSessionInTheSameProcess() {
+        var store = AgentSessionStore()
+        store.applyLocal([local(.finished)], livePIDs: [42], herdrActive: false, now: t0)
+        store.applyLocal([local(.working, sid: "s2")], livePIDs: [42], herdrActive: false, now: t0.addingTimeInterval(5))
+        XCTAssertEqual(Array(store.sessions.keys), ["claude:s2"])
+    }
+
+    func testHooksKeepAuthorityOverTheScan() {
+        var store = AgentSessionStore()
+        store.apply(AgentEvent(agent: "claude", kind: .notification, sessionID: "s1", notificationType: "idle_prompt", at: t0))
+        store.applyLocal([local(.working)], livePIDs: [42], herdrActive: false, now: t0.addingTimeInterval(1))
+        let s = store.sessions["claude:s1"]!
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertEqual(s.state, .waitingInput)
+        XCTAssertEqual(s.pid, 42)
+        // The process exits without a SessionEnd hook (Codex has none): the session goes.
+        store.applyLocal([], livePIDs: [], herdrActive: false, now: t0.addingTimeInterval(2))
+        XCTAssertTrue(store.sessions.isEmpty)
+    }
+
+    func testHerdrPanesAreLeftToHerdr() {
+        var store = AgentSessionStore()
+        store.applyLocal([local(.working, pane: "w:p1")], livePIDs: [42], herdrActive: true, now: t0)
+        XCTAssertTrue(store.sessions.isEmpty)
+        // herdr not running: the same process is still seen.
+        store.applyLocal([local(.working, pane: "w:p1")], livePIDs: [42], herdrActive: false, now: t0)
+        XCTAssertEqual(store.sessions.count, 1)
+    }
+
+    func testHookEventCarriesTheTerminal() {
+        let e = AgentEvent.from(hookInput: ["session_id": "a"], agent: "claude", kind: .prompt,
+                                environment: ["__CFBundleIdentifier": "com.googlecode.iterm2"])
+        XCTAssertEqual(e.terminalBundleID, "com.googlecode.iterm2")
+        var store = AgentSessionStore()
+        store.apply(e)
+        XCTAssertEqual(store.sessions["claude:a"]?.terminalBundleID, "com.googlecode.iterm2")
+    }
+
+    func testScanningThisMacDoesNotCrash() {
+        let scan = LocalAgentSource().scan()
+        XCTAssertTrue(scan.agents.allSatisfy { scan.livePIDs.contains($0.pid) })
+    }
+}
+
+final class HookInstallerSymlinkTests: XCTestCase {
+    let exe = "/Applications/Agentilo.app/Contents/MacOS/Agentilo"
+
+    func testInstallWritesThroughALinkedConfig() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let main = root.appendingPathComponent("main"), other = root.appendingPathComponent("other")
+        try fm.createDirectory(at: main, withIntermediateDirectories: true)
+        try fm.createDirectory(at: other, withIntermediateDirectories: true)
+        try #"{"model":"opus"}"#.write(to: main.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
+        let link = other.appendingPathComponent("settings.json")
+        try fm.createSymbolicLink(at: link, withDestinationURL: main.appendingPathComponent("settings.json"))
+        let a = Account(provider: .claude, homePath: main.path, label: "main")
+        let b = Account(provider: .claude, homePath: other.path, label: "other")
+
+        XCTAssertEqual(HookInstaller.missing(accounts: [a, b], executable: exe, approvals: false, approvalTimeout: 60).map(\.label), ["main"])
+        XCTAssertEqual(HookInstaller.sharesConfig(b, among: [a, b])?.label, "main")
+        XCTAssertNil(HookInstaller.sharesConfig(a, among: [a, b]))
+
+        try HookInstaller.install(for: b, executable: exe, approvals: false, approvalTimeout: 60)
+        XCTAssertNotNil(try? fm.destinationOfSymbolicLink(atPath: link.path), "the link stays a link")
+        XCTAssertEqual(HookInstaller.status(for: a, executable: exe, approvals: false), .installed)
+        XCTAssertEqual(HookInstaller.status(for: b, executable: exe, approvals: false), .installed)
+        XCTAssertTrue(HookInstaller.missing(accounts: [a, b], executable: exe, approvals: false, approvalTimeout: 60).isEmpty)
+        XCTAssertTrue(fm.fileExists(atPath: main.appendingPathComponent("settings.json.agentilo-bak").path))
+    }
+}

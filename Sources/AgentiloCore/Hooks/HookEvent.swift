@@ -55,12 +55,14 @@ public struct AgentEvent: Codable, Equatable, Sendable {
     public var lastMessage: String?
     /// The session transcript, for reading the reply when the hook does not carry it.
     public var transcriptPath: String?
+    /// The app the agent runs in, from the hook's environment.
+    public var terminalBundleID: String?
     public var at: Date
 
     public init(
         agent: String, kind: AgentEventKind, sessionID: String? = nil, cwd: String? = nil, tool: String? = nil,
         detail: String? = nil, notificationType: String? = nil, herdr: HerdrLocation? = nil,
-        lastMessage: String? = nil, transcriptPath: String? = nil, at: Date = Date()
+        lastMessage: String? = nil, transcriptPath: String? = nil, terminalBundleID: String? = nil, at: Date = Date()
     ) {
         self.agent = agent
         self.kind = kind
@@ -72,6 +74,7 @@ public struct AgentEvent: Codable, Equatable, Sendable {
         self.herdr = herdr
         self.lastMessage = lastMessage
         self.transcriptPath = transcriptPath
+        self.terminalBundleID = terminalBundleID
         self.at = at
     }
 
@@ -97,7 +100,8 @@ public struct AgentEvent: Codable, Equatable, Sendable {
             lastMessage: ["last_assistant_message", "last-assistant-message", "last_agent_message", "prompt_response"]
                 .lazy.compactMap { json[$0] as? String }
                 .first { !$0.isEmpty && $0 != "[no response text]" }.map { $0.prefixed(4000) },
-            transcriptPath: json["transcript_path"] as? String
+            transcriptPath: json["transcript_path"] as? String,
+            terminalBundleID: env["__CFBundleIdentifier"].flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 

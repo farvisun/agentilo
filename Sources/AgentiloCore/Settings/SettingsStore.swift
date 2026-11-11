@@ -172,6 +172,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var apiIncludeLabels = false
     /// Read agent state from herdr when it is installed.
     public var herdrEnabled = true
+    /// Find agents by their processes and transcripts, in any terminal, without hooks.
+    public var localDetectionEnabled = true
+    /// The one-time offer to install hooks was shown.
+    public var hookPromptShown = false
     /// Alert when an agent waits for an answer or an approval.
     public var agentAttentionAlerts = true
     /// Alert when an agent finishes a turn that took a while.
@@ -234,6 +238,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         apiPort = try c.decodeIfPresent(Int.self, forKey: .apiPort) ?? d.apiPort
         apiIncludeLabels = try c.decodeIfPresent(Bool.self, forKey: .apiIncludeLabels) ?? d.apiIncludeLabels
         herdrEnabled = try c.decodeIfPresent(Bool.self, forKey: .herdrEnabled) ?? d.herdrEnabled
+        localDetectionEnabled = try c.decodeIfPresent(Bool.self, forKey: .localDetectionEnabled) ?? d.localDetectionEnabled
+        hookPromptShown = try c.decodeIfPresent(Bool.self, forKey: .hookPromptShown) ?? d.hookPromptShown
         agentAttentionAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentAttentionAlerts) ?? d.agentAttentionAlerts
         agentDoneAlerts = try c.decodeIfPresent(Bool.self, forKey: .agentDoneAlerts) ?? d.agentDoneAlerts
         agentDoneSummary = try c.decodeIfPresent(Bool.self, forKey: .agentDoneSummary) ?? d.agentDoneSummary

@@ -47,12 +47,12 @@ public enum TranscriptTail {
         }
     }
 
-    private static func tail(of file: URL) -> (String, cut: Bool)? {
+    static func tail(of file: URL, bytes: Int = tailBytes) -> (String, cut: Bool)? {
         guard let h = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? h.close() }
         let size = (try? h.seekToEnd()) ?? 0
-        let cut = size > UInt64(tailBytes)
-        try? h.seek(toOffset: cut ? size - UInt64(tailBytes) : 0)
+        let cut = size > UInt64(bytes)
+        try? h.seek(toOffset: cut ? size - UInt64(bytes) : 0)
         guard let data = try? h.readToEnd() else { return nil }
         return (String(decoding: data, as: UTF8.self), cut)
     }

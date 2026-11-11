@@ -26,12 +26,22 @@ extension AppState {
 
     func startAgents() {
         agentLoop?.cancel()
+        let local = LocalAgentSource()
         agentLoop = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
+                var herdrActive = false
                 if self.settings.herdrEnabled {
                     let list = await Task.detached(priority: .utility) { HerdrSource.list() }.value
-                    if let list { self.notify(self.agents.applyHerdr(list)) }
+                    if let list {
+                        herdrActive = true
+                        self.notify(self.agents.applyHerdr(list))
+                    }
+                }
+                // Agents in any terminal, outside herdr and without hooks.
+                if self.settings.localDetectionEnabled {
+                    let scan = await Task.detached(priority: .utility) { local.scan() }.value
+                    self.notify(self.agents.applyLocal(scan.agents, livePIDs: scan.livePIDs, herdrActive: herdrActive))
                 }
                 self.agents.prune()
                 self.updateKeepAwake()
@@ -152,11 +162,59 @@ extension AppState {
     func jump(to session: AgentSession) {
         agents.acknowledge(session.id)
         let pane = session.herdr?.pane
+        // herdr panes live in Ghostty; anything else names its app in the environment.
+        let bundles = (pane == nil ? [session.terminalBundleID].compactMap { $0 } : []) + [Self.ghosttyBundleID]
         Task.detached(priority: .userInitiated) {
             if let pane { HerdrSource.focus(pane: pane) }
             _ = await MainActor.run {
-                NSRunningApplication.runningApplications(withBundleIdentifier: Self.ghosttyBundleID).first?.activate()
+                bundles.lazy.compactMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first }
+                    .first?.activate()
             }
+        }
+    }
+
+    // MARK: Hooks
+
+    /// Once: offers to install hooks in homes that lack them, so tools, approvals and
+    /// questions show up in the notch too, not only working and finished.
+    func offerHooksOnce() {
+        guard !settings.hookPromptShown, let exe = CLIInstaller.executablePath else { return }
+        let missing = HookInstaller.missing(
+            accounts: settings.accounts, executable: exe,
+            approvals: settings.approvalsEnabled, approvalTimeout: settings.approvalTimeout
+        )
+        guard !missing.isEmpty else { return }
+        settings.hookPromptShown = true
+        let alert = NSAlert()
+        alert.messageText = "Install Agentilo hooks?"
+        alert.informativeText = """
+            Agentilo sees running agents in any terminal, but only hooks tell it which tool runs, \
+            when an agent asks for approval or input, and work outside herdr reliably. \
+            Agentilo adds commands marked `# agentilo` and keeps a backup of each file:
+
+            \(missing.map { "• \($0.label) (\(Paths.abbreviate($0.homePath)))" }.joined(separator: "\n"))
+
+            You can change this later in Settings → Agents.
+            """
+        alert.addButton(withTitle: "Install")
+        alert.addButton(withTitle: "Not now")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        var failed: [String] = []
+        for acct in missing {
+            do {
+                try HookInstaller.install(
+                    for: acct, executable: exe, approvals: settings.approvalsEnabled, approvalTimeout: settings.approvalTimeout
+                )
+            } catch {
+                failed.append("\(acct.label): \(error.localizedDescription)")
+            }
+        }
+        if !failed.isEmpty {
+            let err = NSAlert()
+            err.messageText = "Some hooks were not installed"
+            err.informativeText = failed.joined(separator: "\n")
+            err.runModal()
         }
     }
 

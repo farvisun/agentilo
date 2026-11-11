@@ -7,19 +7,19 @@ struct AgentsTab: View {
     @State private var cliInstalled = CLIInstaller.isInstalled
     @State private var cliError: String?
     @State private var hookRevision = 0
+    @State private var hookError: String?
 
     var body: some View {
         Form {
             Section("Agent activity") {
+                Toggle("Detect agents from running processes", isOn: $state.settings.localDetectionEnabled)
                 Toggle("Read agent state from herdr", isOn: $state.settings.herdrEnabled)
                     .disabled(HerdrSource.executable == nil)
                 Toggle("Alert when an agent needs input or approval", isOn: $state.settings.agentAttentionAlerts)
                 Toggle("Alert when an agent finishes a longer turn", isOn: $state.settings.agentDoneAlerts)
                 Toggle("Show the start of the agent's last reply", isOn: $state.settings.agentDoneSummary)
                 Toggle("Show a working agent's turn time in the collapsed notch", isOn: $state.settings.pillShowsAgents)
-                Text(HerdrSource.executable == nil
-                     ? "herdr is not installed. Hooks below still report Claude Code, Codex and Gemini CLI sessions."
-                     : "herdr reports every agent pane (working, blocked, idle); hooks add the current tool and approval details. Click an agent in the notch to jump to its pane in Ghostty.")
+                Text("Running Claude Code, Codex and Gemini CLI sessions are found in any terminal from their processes and transcripts (working and finished). Hooks below add the current tool, approvals and questions. \(HerdrSource.executable == nil ? "" : "herdr reports its panes with focus and titles. ")Click an agent in the notch to bring its terminal forward.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -44,11 +44,28 @@ struct AgentsTab: View {
                 }
                 ForEach(accounts) { acct in
                     HookRow(
-                        account: acct, executable: CLIInstaller.executablePath,
+                        account: acct, sharesWith: HookInstaller.sharesConfig(acct, among: accounts),
+                        executable: CLIInstaller.executablePath,
                         approvals: state.settings.approvalsEnabled, approvalTimeout: state.settings.approvalTimeout,
                         revision: hookRevision
                     ) {
                         hookRevision += 1
+                    }
+                }
+                if let exe = CLIInstaller.executablePath {
+                    let missing = HookInstaller.missing(
+                        accounts: accounts, executable: exe,
+                        approvals: state.settings.approvalsEnabled, approvalTimeout: state.settings.approvalTimeout
+                    )
+                    let _ = hookRevision
+                    if missing.count > 1 {
+                        HStack {
+                            Spacer()
+                            Button("Install all") { installAll(missing, executable: exe) }
+                        }
+                    }
+                    if let hookError {
+                        Text(hookError).font(.caption).foregroundStyle(.red)
                     }
                 }
                 if CLIInstaller.executablePath == nil {
@@ -99,6 +116,22 @@ struct AgentsTab: View {
         .formStyle(.grouped)
     }
 
+    private func installAll(_ accounts: [Account], executable: String) {
+        var failed: [String] = []
+        for acct in accounts {
+            do {
+                try HookInstaller.install(
+                    for: acct, executable: executable,
+                    approvals: state.settings.approvalsEnabled, approvalTimeout: state.settings.approvalTimeout
+                )
+            } catch {
+                failed.append("\(acct.label): \(error.localizedDescription)")
+            }
+        }
+        hookError = failed.isEmpty ? nil : failed.joined(separator: "\n")
+        hookRevision += 1
+    }
+
     private func act(_ f: () throws -> Void) {
         do {
             try f()
@@ -112,6 +145,8 @@ struct AgentsTab: View {
 
 private struct HookRow: View {
     var account: Account
+    /// An account listed above that uses the same config file.
+    var sharesWith: Account?
     var executable: String?
     var approvals: Bool
     var approvalTimeout: Int
@@ -132,7 +167,9 @@ private struct HookRow: View {
                     Text(statusText(status)).font(.caption).foregroundStyle(statusColor(status))
                 }
                 Spacer()
-                if let executable {
+                if let sharesWith {
+                    Text("Same file as \(sharesWith.label)").font(.caption).foregroundStyle(.secondary)
+                } else if let executable {
                     if status != .notInstalled {
                         Button("Remove") { act { try HookInstaller.uninstall(for: account) } }
                     }

@@ -202,6 +202,11 @@ final class AppState {
         startAgents()
         startPillRotation()
         refreshStats()
+        // After the notch is up, so the alert does not hold up launch.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            self?.offerHooksOnce()
+        }
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {

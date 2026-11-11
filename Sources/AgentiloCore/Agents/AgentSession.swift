@@ -48,6 +48,10 @@ public struct AgentSession: Identifiable, Equatable, Sendable {
     /// Excerpt of the agent's last reply, once the turn finished.
     public var lastReply: String?
     public var transcriptPath: String?
+    /// The agent's process, when found by `LocalAgentSource`.
+    public var pid: Int32?
+    /// The app the agent runs in, for bringing it forward.
+    public var terminalBundleID: String?
 
     public var provider: Provider? { Provider(rawValue: agent) }
     public var project: String { cwd.map { ($0 as NSString).lastPathComponent } ?? agent }
@@ -108,6 +112,7 @@ public struct AgentSessionStore: Equatable, Sendable {
         s.lastEventAt = e.at
         s.lastHookAt = e.at
         s.transcriptPath = e.transcriptPath ?? s.transcriptPath
+        s.terminalBundleID = e.terminalBundleID ?? s.terminalBundleID
 
         let next: AgentState
         switch e.kind {
@@ -202,6 +207,54 @@ public struct AgentSessionStore: Equatable, Sendable {
         for (key, s) in sessions where s.herdr != nil && !seen.contains(key) {
             // A pane can report through hooks a moment before herdr lists it.
             if let hook = s.lastHookAt, now.timeIntervalSince(hook) < 10 { continue }
+            sessions[key] = nil
+        }
+        return out
+    }
+
+    // MARK: Processes and transcripts
+
+    /// Applies a scan of running agent processes. Sessions herdr or hooks report on keep their
+    /// state and only gain the process and its terminal; the rest follow their transcript.
+    /// Sessions whose process exited are dropped.
+    @discardableResult
+    public mutating func applyLocal(
+        _ agents: [LocalAgent], livePIDs: Set<Int32>, herdrActive: Bool, now: Date = Date()
+    ) -> [AgentTransition] {
+        var out: [AgentTransition] = []
+        for a in agents {
+            // herdr reports its own panes, with focus and title.
+            if herdrActive, a.herdrPane != nil { continue }
+            // `/clear` or `/resume` starts a new session in the same process.
+            for (key, s) in sessions where s.pid == a.pid && s.sessionID != a.sessionID && s.lastHookAt == nil && s.herdr == nil {
+                sessions[key] = nil
+            }
+            let key = sessions.first { $0.value.agent == a.agent && $0.value.sessionID == a.sessionID }?.key
+                ?? Self.key(agent: a.agent, sessionID: a.sessionID, herdr: nil)
+            var s = sessions[key] ?? AgentSession(
+                id: key, agent: a.agent, sessionID: a.sessionID, cwd: a.cwd, state: .idle,
+                herdr: nil, stateSince: now, lastEventAt: now
+            )
+            let old = sessions[key]?.state
+            s.pid = a.pid
+            s.terminalBundleID = s.terminalBundleID ?? a.terminalBundleID
+            s.cwd = s.cwd ?? a.cwd
+            s.transcriptPath = s.transcriptPath ?? a.transcriptPath
+            s.lastEventAt = now
+            if s.lastHookAt != nil || s.herdr != nil {
+                sessions[key] = s
+                continue
+            }
+            var next = s.state
+            switch a.activity {
+            case .working: next = .working
+            case .finished: if s.state == .working { next = .done }
+            }
+            if old == nil { next = a.activity == .working ? .working : .idle }
+            out += set(&s, next, previous: old, at: now)
+        }
+        for (key, s) in sessions where s.herdr == nil {
+            guard let pid = s.pid, !livePIDs.contains(pid) else { continue }
             sessions[key] = nil
         }
         return out
