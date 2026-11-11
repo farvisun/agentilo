@@ -1849,3 +1849,12 @@ final class LimitsPayloadFilterTests: XCTestCase {
         XCTAssertNil(p.filtered("gemini"))
     }
 }
+
+final class ProviderLinksTests: XCTestCase {
+    func testEveryProviderHasHTTPSLinks() {
+        for p in Provider.allCases {
+            XCTAssertFalse(p.links.isEmpty, p.rawValue)
+            XCTAssertTrue(p.links.allSatisfy { $0.url.scheme == "https" }, p.rawValue)
+        }
+    }
+}

@@ -36,6 +36,20 @@ public enum Provider: String, Codable, CaseIterable, Sendable, Identifiable {
         }
     }
 
+    /// The provider's status page, then where it shows usage and billing on the web.
+    public var links: [(title: String, url: URL)] {
+        let pairs: [(String, String)] = switch self {
+        case .claude: [("Status page", "https://status.claude.com"), ("Usage on claude.ai", "https://claude.ai/settings/usage")]
+        case .codex: [("Status page", "https://status.openai.com"), ("Usage on chatgpt.com", "https://chatgpt.com/codex/settings/usage")]
+        case .cursor: [("Status page", "https://status.cursor.com"), ("Cursor dashboard", "https://cursor.com/dashboard")]
+        case .gemini: [("Google Cloud status", "https://status.cloud.google.com")]
+        case .copilot: [("Status page", "https://www.githubstatus.com"), ("Copilot settings", "https://github.com/settings/copilot")]
+        case .openRouter: [("Status page", "https://status.openrouter.ai"), ("Activity", "https://openrouter.ai/activity"), ("Credits", "https://openrouter.ai/settings/credits")]
+        case .opencode: [("OpenCode Console", "https://opencode.ai/console")]
+        }
+        return pairs.compactMap { t, u in URL(string: u).map { (t, $0) } }
+    }
+
     /// Whether another account of this provider can be started from a command, so suggesting one helps.
     public var switchesAccounts: Bool { ![.copilot, .openRouter, .opencode].contains(self) }
 }
