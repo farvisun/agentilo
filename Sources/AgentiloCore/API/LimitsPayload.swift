@@ -105,6 +105,7 @@ public struct LimitsPayload: Codable, Equatable, Sendable {
                 case .weekly: "W"
                 case .billing: "M"
                 case .other: String(w.title.prefix(1))
+                case .balance: "$"
                 }
                 return "\(letter) \(Int(w.usedPercent.rounded()))%\(w.pace == "limitReached" || w.pace == "runsOut" ? "!" : "")"
             }

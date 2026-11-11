@@ -5,6 +5,8 @@ public enum WindowKind: String, Codable, Sendable {
     case weekly
     case billing
     case other
+    /// A balance with no cap (prepaid credits): shown as an amount, never as a meter or alert.
+    case balance
 }
 
 /// A single limit window as reported by a provider (5-hour session, weekly, billing cycle...).
@@ -18,6 +20,7 @@ public struct UsageWindow: Codable, Hashable, Sendable, Identifiable {
         case .weekly: return "W"
         case .billing: return "M"
         case .other: return String(title.prefix(1)).uppercased()
+        case .balance: return "$"
         }
     }
 
@@ -146,7 +149,8 @@ public struct UsageSnapshot: Codable, Hashable, Sendable {
     }
 
     static func mostCritical(_ windows: [UsageWindow], now: Date) -> UsageWindow? {
-        windows.max { a, b in
+        let limits = windows.filter { $0.kind != .balance }
+        return (limits.isEmpty ? windows : limits).max { a, b in
             let pa = a.pace(now: now).severity, pb = b.pace(now: now).severity
             if pa != pb { return pa < pb }
             return a.usedPercent < b.usedPercent

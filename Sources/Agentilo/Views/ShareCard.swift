@@ -28,9 +28,14 @@ struct ShareCard: View {
                     .foregroundStyle(Palette.tertiary)
             }
             VStack(spacing: 9) {
-                ForEach(snapshot.windows) { w in
+                ForEach(snapshot.windows.filter { $0.kind != .balance }) { w in
                     WindowRow(window: w, mode: mode, estimated: snapshot.source == .estimated, now: now)
                 }
+            }
+            let balances = snapshot.windows.filter { $0.kind == .balance }
+            if !balances.isEmpty {
+                MoreWindowsLine(windows: balances, mode: mode, now: now)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(16)

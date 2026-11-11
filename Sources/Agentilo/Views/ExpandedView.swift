@@ -184,10 +184,14 @@ struct AccountPage: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             if let snap = status.snapshot, !snap.windows.isEmpty {
+                let (meters, more) = Self.split(snap.windows)
                 VStack(spacing: 9) {
-                    ForEach(snap.windows.prefix(3)) { w in
+                    ForEach(meters) { w in
                         WindowRow(window: w, mode: mode, estimated: snap.source == .estimated, now: now)
                     }
+                }
+                if !more.isEmpty {
+                    MoreWindowsLine(windows: more, mode: mode, now: now)
                 }
             } else if status.loading {
                 HStack {
@@ -213,6 +217,13 @@ struct AccountPage: View {
                 footer
             }
         }
+    }
+
+    /// Up to three limits get a meter; further limits and balances share one line below them.
+    static func split(_ windows: [UsageWindow]) -> (meters: [UsageWindow], more: [UsageWindow]) {
+        let limits = windows.filter { $0.kind != .balance }
+        let meters = Array(limits.prefix(3))
+        return (meters, Array(limits.dropFirst(3)) + windows.filter { $0.kind == .balance })
     }
 
     private var header: some View {
@@ -347,6 +358,39 @@ private struct SwitchRow: View {
         .foregroundStyle(Color.white)
         .padding(.horizontal, 8).padding(.vertical, 5)
         .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(0.07)))
+    }
+}
+
+/// "Spark 7% · Weekly · Opus 31% · Credits 812 credits": limits past the third meter, and balances.
+struct MoreWindowsLine: View {
+    var windows: [UsageWindow]
+    var mode: UsageDisplay
+    var now: Date
+
+    var body: some View {
+        windows.enumerated().reduce(Text("")) { line, item in
+            let (i, w) = item
+            let sep = i == 0 ? Text("") : Text("  ·  ").foregroundColor(Palette.tertiary)
+            return line + sep + Text("\(w.title) ").foregroundColor(Palette.secondary) + value(w)
+        }
+        .font(.system(size: 10).monospacedDigit())
+        .lineLimit(2)
+        .help(windows.map(tooltip).joined(separator: "\n"))
+    }
+
+    private func value(_ w: UsageWindow) -> Text {
+        if w.kind == .balance { return Text(w.detail ?? "").foregroundColor(Color.white.opacity(0.85)) }
+        let v = Int(mode.value(w.usedPercent).rounded())
+        return Text("\(v)%\(mode == .remaining ? " left" : "")")
+            .fontWeight(.semibold)
+            .foregroundColor(w.pace(now: now).color)
+    }
+
+    private func tooltip(_ w: UsageWindow) -> String {
+        var parts = [w.title]
+        if let d = w.detail { parts.append(d) }
+        if let r = w.resetsAt { parts.append("resets \(Formatters.resetTime(r, now: now))") }
+        return parts.joined(separator: " · ")
     }
 }
 
