@@ -75,28 +75,44 @@ public struct CodexProvider: UsageProvider {
         return snap
     }
 
+    /// One ChatGPT credit in dollars, the rate the usage page uses.
+    static let creditUSD = 0.04
+
     static func parse(_ json: [String: Any], now: Date = Date()) -> UsageSnapshot {
-        var windows: [UsageWindow] = []
         let rate = J.dict(json["rate_limit"])
-        for key in ["primary_window", "secondary_window"] {
-            guard let w = J.dict(rate?[key]), let pct = J.double(w["used_percent"]) else { continue }
-            let length = J.double(w["limit_window_seconds"])
-            var reset = J.double(w["reset_at"]).map { Date(timeIntervalSince1970: $0) }
-            if reset == nil, let after = J.double(w["reset_after_seconds"]) { reset = now.addingTimeInterval(after) }
-            // The primary window is not always the 5-hour one, so classify by length.
-            let isSession = (length ?? 0) > 0 && (length ?? 0) <= 86_400
-            windows.append(UsageWindow(
-                id: key,
-                kind: isSession ? .session : .weekly,
-                title: isSession ? "Session" : "Weekly",
-                usedPercent: pct,
-                resetsAt: reset,
-                windowLength: length
-            ))
-        }
-        windows.sort { ($0.windowLength ?? .infinity) < ($1.windowLength ?? .infinity) }
+        var windows = Self.windows(rate, idPrefix: "", label: nil, now: now)
         if windows.isEmpty, rate?["limit_reached"] as? Bool == true {
             windows.append(UsageWindow(id: "limit", kind: .other, title: "Limit", usedPercent: 100, resetsAt: nil, windowLength: nil))
+        }
+        // Model-scoped limits, such as GPT-5.3-Codex-Spark, sit in their own list.
+        let extra = (json["additional_rate_limits"] as? [[String: Any]]) ?? []
+        if let spark = extra.first(where: { e in
+            [J.string(e["limit_name"]), J.string(e["metered_feature"])]
+                .compactMap { $0?.lowercased() }.contains { $0.contains("spark") }
+        }) {
+            windows += Self.windows(J.dict(spark["rate_limit"]), idPrefix: "spark_", label: "Spark", now: now)
+        }
+        if let limit = J.dict(J.dict(json["spend_control"])?["individual_limit"]),
+           let cap = J.double(limit["limit"]), cap > 0 {
+            let used = J.double(limit["used"]) ?? 0
+            windows.append(UsageWindow(
+                id: "credit_limit", kind: .billing, title: "Credit limit",
+                usedPercent: used / cap * 100,
+                resetsAt: J.double(limit["reset_at"]).map { Date(timeIntervalSince1970: $0) },
+                windowLength: nil,
+                detail: "\(Int(used)) of \(Int(cap)) credits"
+            ))
+        }
+        if let credits = J.dict(json["credits"]), credits["has_credits"] as? Bool == true {
+            let detail: String
+            if credits["unlimited"] as? Bool == true {
+                detail = "Unlimited"
+            } else {
+                let n = (J.double(credits["balance"]) ?? 0).rounded(.down)
+                detail = "\(Int(n)) credits · ≈ \(Formatters.money(n * creditUSD))"
+            }
+            windows.append(UsageWindow(id: "credits", kind: .balance, title: "Credits", usedPercent: 0,
+                                       resetsAt: nil, windowLength: nil, detail: detail))
         }
         let plan = J.string(json["plan_type"]).map(planName)
         let resets = J.double(J.dict(json["rate_limit_reset_credits"])?["available_count"]).map { Int($0) } ?? 0
@@ -104,6 +120,30 @@ public struct CodexProvider: UsageProvider {
             windows: windows, plan: plan, email: J.string(json["email"]), fetchedAt: now,
             resetGrants: resets > 0 ? ResetGrants(available: resets) : nil
         )
+    }
+
+    /// The primary and secondary windows of one rate limit, shortest first. The primary window is
+    /// not always the 5-hour one, so they are classified by length.
+    static func windows(_ rate: [String: Any]?, idPrefix: String, label: String?, now: Date) -> [UsageWindow] {
+        var out: [UsageWindow] = []
+        for key in ["primary_window", "secondary_window"] {
+            guard let w = J.dict(rate?[key]), let pct = J.double(w["used_percent"]) else { continue }
+            let length = J.double(w["limit_window_seconds"])
+            var reset = J.double(w["reset_at"]).map { Date(timeIntervalSince1970: $0) }
+            if reset == nil, let after = J.double(w["reset_after_seconds"]) { reset = now.addingTimeInterval(after) }
+            let isSession = (length ?? 0) > 0 && (length ?? 0) <= 86_400
+            let title: String
+            if let label { title = isSession ? label : "\(label) Weekly" } else { title = isSession ? "Session" : "Weekly" }
+            out.append(UsageWindow(
+                id: idPrefix + key,
+                kind: isSession ? .session : .weekly,
+                title: title,
+                usedPercent: pct,
+                resetsAt: reset,
+                windowLength: length
+            ))
+        }
+        return out.sorted { ($0.windowLength ?? .infinity) < ($1.windowLength ?? .infinity) }
     }
 
     /// The soonest expiry among credits that can still be used.

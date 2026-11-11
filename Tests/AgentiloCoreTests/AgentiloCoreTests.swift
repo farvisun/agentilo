@@ -95,6 +95,24 @@ final class ProviderParsingTests: XCTestCase {
         XCTAssertEqual(snap.windows.last?.resetsAt, Date(timeIntervalSince1970: 1_793_082_740))
     }
 
+    func testCodexSparkCreditsAndCreditLimit() throws {
+        let snap = CodexProvider.parse(try fixtureJSON("codex_usage_extras.json"))
+        XCTAssertEqual(snap.windows.map(\.title), ["Session", "Weekly", "Spark", "Spark Weekly", "Credit limit", "Credits"])
+        XCTAssertEqual(snap.windows.map(\.id).prefix(4), ["primary_window", "secondary_window", "spark_primary_window", "spark_secondary_window"])
+        let limit = try XCTUnwrap(snap.windows.first { $0.id == "credit_limit" })
+        XCTAssertEqual(limit.usedPercent, 150.5 / 600 * 100, accuracy: 0.001)
+        XCTAssertEqual(limit.detail, "150 of 600 credits")
+        XCTAssertEqual(limit.resetsAt, Date(timeIntervalSince1970: 1_793_500_000))
+        let credits = try XCTUnwrap(snap.windows.last)
+        XCTAssertEqual(credits.kind, .balance)
+        XCTAssertEqual(credits.detail, "812 credits · ≈ $32.48")
+        // A balance never wins "most critical" over a real limit.
+        XCTAssertEqual(snap.mostCritical(now: Date(timeIntervalSince1970: 1_792_650_000))?.kind, .session)
+        // No credits, no Spark: nothing extra (the base fixture).
+        let plain = CodexProvider.parse(try fixtureJSON("codex_usage.json"))
+        XCTAssertEqual(plain.windows.count, 2)
+    }
+
     func testCursorBilling() throws {
         let snap = CursorProvider.parse(try fixtureJSON("cursor_usage.json"))
         XCTAssertEqual(snap.windows.map(\.id), ["plan", "on_demand"])
