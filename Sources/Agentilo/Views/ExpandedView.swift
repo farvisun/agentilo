@@ -253,17 +253,14 @@ struct AccountPage: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Menu {
-                ForEach(account.provider.links, id: \.url) { link in
-                    Button(link.title) { NSWorkspace.shared.open(link.url) }
+            ProviderIcon(provider: account.provider, size: 22)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    ForEach(account.provider.links, id: \.url) { link in
+                        Button(link.title) { NSWorkspace.shared.open(link.url) }
+                    }
                 }
-            } label: {
-                ProviderIcon(provider: account.provider, size: 22)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("\(account.provider.displayName) status and usage pages")
+                .help("Right-click for \(account.provider.displayName)'s status and usage pages")
             VStack(alignment: .leading, spacing: 1) {
                 Text(account.provider.displayName)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
