@@ -820,6 +820,44 @@ final class AgentSessionTests: XCTestCase {
         XCTAssertEqual(store.sessions["herdr:w:p1"]?.state, .waitingInput)
     }
 
+    func testInformationalNotificationsKeepTheAgentWorking() {
+        var store = AgentSessionStore()
+        store.apply(event(.prompt, at: 0))
+        store.apply(event(.preTool, at: 1))
+        // Claude Code notifies about background agents, MCP elicitations, logins and plugins
+        // while the turn runs; none of them asks anything of the user.
+        for (i, type) in ["agent_completed", "agent_needs_input", "elicitation_complete", "elicitation_response",
+                          "auth_success", "computer_use_enter", "plugin_notification", "push_notification"].enumerated() {
+            XCTAssertEqual(store.apply(event(.notification, at: 2 + Double(i), type: type)), [], type)
+        }
+        XCTAssertEqual(store.sessions["claude:s1"]?.state, .working)
+        XCTAssertEqual(store.attentionCount, 0)
+        // The ones that do ask still count.
+        XCTAssertEqual(store.apply(event(.notification, at: 20, type: "worker_permission_prompt")).first?.to, .waitingPermission)
+    }
+
+    func testUntypedNotificationsAreReadByText() {
+        func state(_ text: String) -> AgentState? {
+            AgentSessionStore.notificationState(AgentEvent(agent: "claude", kind: .notification, detail: text))
+        }
+        XCTAssertEqual(state("Claude needs your permission to use Bash"), .waitingPermission)
+        XCTAssertEqual(state("Claude is waiting for your input"), .waitingInput)
+        XCTAssertNil(state("Background task finished"))
+    }
+
+    func testStaleHerdrBlockedDoesNotReopenAnAnsweredPrompt() {
+        var store = AgentSessionStore()
+        store.applyHerdr([herdr(.working)], now: t0)
+        store.apply(event(.notification, at: 1, herdr: pane, type: "permission_prompt"))
+        // Answered in the terminal: the tool runs.
+        store.apply(event(.postTool, at: 5, herdr: pane))
+        // herdr has not re-read the screen yet and still says blocked.
+        XCTAssertEqual(store.applyHerdr([herdr(.blocked)], now: t0.addingTimeInterval(6)), [])
+        XCTAssertEqual(store.sessions["herdr:w:p1"]?.state, .working)
+        // Still blocked once the hook has gone quiet: a real prompt.
+        XCTAssertEqual(store.applyHerdr([herdr(.blocked)], now: t0.addingTimeInterval(12)).first?.to, .waitingPermission)
+    }
+
     func testFirstSightingIsNotATransitionToDone() {
         var store = AgentSessionStore()
         let t = store.applyHerdr([herdr(.idle)], now: t0)

@@ -131,7 +131,13 @@ public struct AgentSessionStore: Equatable, Sendable {
         case .postTool:
             next = .working
         case .notification:
-            next = Self.notificationState(e)
+            // Informational notices (a background agent finished, a login, an MCP elicitation)
+            // arrive while the agent keeps working: they change nothing.
+            guard let asked = Self.notificationState(e) else {
+                next = s.state
+                break
+            }
+            next = asked
             s.detail = e.detail ?? s.detail
         case .permission:
             next = .waitingPermission
@@ -147,13 +153,21 @@ public struct AgentSessionStore: Equatable, Sendable {
         return set(&s, next, previous: old, at: e.at)
     }
 
-    static func notificationState(_ e: AgentEvent) -> AgentState {
+    /// The state a notification puts the session in; nil when it asks nothing of the user.
+    /// Claude Code also notifies about background agents, logins, computer use, plugins and MCP
+    /// elicitations; those must not raise "needs your input" while the agent works.
+    static func notificationState(_ e: AgentEvent) -> AgentState? {
         switch e.notificationType {
-        case "permission_prompt", "ToolPermission": return .waitingPermission
+        case "permission_prompt", "worker_permission_prompt", "ToolPermission": return .waitingPermission
         case "idle_prompt", "elicitation_dialog": return .waitingInput
-        default:
+        case nil, "":
+            // Agents that send no type: read the text.
             let text = (e.detail ?? "").lowercased()
-            return text.contains("permission") || text.contains("approve") ? .waitingPermission : .waitingInput
+            if text.contains("permission") || text.contains("approve") { return .waitingPermission }
+            if text.contains("waiting for your input") || text.contains("needs your input") { return .waitingInput }
+            return nil
+        default:
+            return nil
         }
     }
 
@@ -193,7 +207,9 @@ public struct AgentSessionStore: Equatable, Sendable {
             case .working:
                 if !fresh { next = .working }
             case .blocked:
-                if !s.state.needsAttention { next = .waitingPermission }
+                // A hook that just reported progress (the prompt was answered, a tool ran)
+                // outranks a screen herdr has not re-read yet.
+                if !s.state.needsAttention && !fresh { next = .waitingPermission }
             case .idle, .done:
                 // Idle after work means the turn finished; idle at start is just idle.
                 // A closed approval prompt likewise; a question stays open until the next prompt.
