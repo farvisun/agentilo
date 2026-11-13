@@ -4,6 +4,12 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-13
+
+### Fixed
+
+- A finished conversation no longer turns into "Needs input" a minute later. Claude Code sends "Claude is waiting for your input" (`idle_prompt`) when it sits at its prompt after a turn; that now keeps the session done (or idle once seen), and only closes a turn whose Stop hook never arrived.
+
 ## [0.9.1] - 2026-11-12
 
 ### Fixed
@@ -127,7 +133,8 @@ All notable changes to Agentilo are listed here. The format follows [Keep a Chan
 
 - The first release: Claude Code, Codex and Cursor plan limits beside the notch, paced, with alerts, live agent sessions from herdr and hooks, permission prompts answered from the notch, an activity page, a loopback API and the `agentilo` command.
 
-[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/farvisun/agentilo/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/farvisun/agentilo/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/farvisun/agentilo/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/farvisun/agentilo/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/farvisun/agentilo/compare/v0.8.0...v0.8.1
