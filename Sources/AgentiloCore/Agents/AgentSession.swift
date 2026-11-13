@@ -2,7 +2,7 @@ import Foundation
 
 public enum AgentState: String, Codable, Sendable {
     case working
-    /// Asked a question or finished and wants the next prompt, per the agent.
+    /// Asked a question mid-turn (a dialog is open), per the agent.
     case waitingInput
     /// An approval prompt is open.
     case waitingPermission
@@ -137,6 +137,12 @@ public struct AgentSessionStore: Equatable, Sendable {
                 next = s.state
                 break
             }
+            if asked == .done {
+                // "Waiting for your input" comes a minute after the turn ended: the conversation is
+                // over, not a question. It only closes a turn whose Stop hook never arrived.
+                next = s.state == .working ? .done : s.state
+                break
+            }
             next = asked
             s.detail = e.detail ?? s.detail
         case .permission:
@@ -156,15 +162,18 @@ public struct AgentSessionStore: Equatable, Sendable {
     /// The state a notification puts the session in; nil when it asks nothing of the user.
     /// Claude Code also notifies about background agents, logins, computer use, plugins and MCP
     /// elicitations; those must not raise "needs your input" while the agent works.
+    /// `.done` means the agent sits idle at its prompt after a finished turn (`idle_prompt`).
     static func notificationState(_ e: AgentEvent) -> AgentState? {
         switch e.notificationType {
         case "permission_prompt", "worker_permission_prompt", "ToolPermission": return .waitingPermission
-        case "idle_prompt", "elicitation_dialog": return .waitingInput
+        case "elicitation_dialog": return .waitingInput
+        case "idle_prompt": return .done
         case nil, "":
             // Agents that send no type: read the text.
             let text = (e.detail ?? "").lowercased()
             if text.contains("permission") || text.contains("approve") { return .waitingPermission }
-            if text.contains("waiting for your input") || text.contains("needs your input") { return .waitingInput }
+            if text.contains("waiting for your input") { return .done }
+            if text.contains("needs your input") { return .waitingInput }
             return nil
         default:
             return nil

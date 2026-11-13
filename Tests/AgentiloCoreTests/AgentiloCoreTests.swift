@@ -814,10 +814,27 @@ final class AgentSessionTests: XCTestCase {
     func testFreshHookWinsOverHerdr() {
         var store = AgentSessionStore()
         store.applyHerdr([herdr(.working)], now: t0)
-        store.apply(event(.notification, at: 1, herdr: pane, type: "idle_prompt"))
+        store.apply(event(.notification, at: 1, herdr: pane, type: "elicitation_dialog"))
         // herdr still reads the screen as working a moment later; the hook knows better.
         store.applyHerdr([herdr(.working)], now: t0.addingTimeInterval(2))
         XCTAssertEqual(store.sessions["herdr:w:p1"]?.state, .waitingInput)
+    }
+
+    func testIdlePromptAfterAFinishedTurnDoesNotAskForInput() {
+        var store = AgentSessionStore()
+        store.apply(event(.prompt, at: 0))
+        store.apply(event(.stop, at: 10))
+        // Claude Code says "Claude is waiting for your input" a minute after the turn ended.
+        XCTAssertEqual(store.apply(event(.notification, at: 70, type: "idle_prompt")), [])
+        XCTAssertEqual(store.sessions["claude:s1"]?.state, .done)
+        XCTAssertEqual(store.attentionCount, 0)
+        // Seen already: it stays idle.
+        store.acknowledge("claude:s1")
+        XCTAssertEqual(store.apply(event(.notification, at: 130, type: "idle_prompt")), [])
+        XCTAssertEqual(store.sessions["claude:s1"]?.state, .idle)
+        // The Stop hook never came: the idle prompt still closes the turn.
+        store.apply(event(.prompt, at: 200))
+        XCTAssertEqual(store.apply(event(.notification, at: 260, type: "idle_prompt")).first?.to, .done)
     }
 
     func testInformationalNotificationsKeepTheAgentWorking() {
@@ -841,7 +858,8 @@ final class AgentSessionTests: XCTestCase {
             AgentSessionStore.notificationState(AgentEvent(agent: "claude", kind: .notification, detail: text))
         }
         XCTAssertEqual(state("Claude needs your permission to use Bash"), .waitingPermission)
-        XCTAssertEqual(state("Claude is waiting for your input"), .waitingInput)
+        XCTAssertEqual(state("Claude is waiting for your input"), .done)
+        XCTAssertEqual(state("Gemini needs your input"), .waitingInput)
         XCTAssertNil(state("Background task finished"))
     }
 
@@ -1751,7 +1769,7 @@ final class LocalAgentTests: XCTestCase {
 
     func testHooksKeepAuthorityOverTheScan() {
         var store = AgentSessionStore()
-        store.apply(AgentEvent(agent: "claude", kind: .notification, sessionID: "s1", notificationType: "idle_prompt", at: t0))
+        store.apply(AgentEvent(agent: "claude", kind: .notification, sessionID: "s1", notificationType: "elicitation_dialog", at: t0))
         store.applyLocal([local(.working)], livePIDs: [42], herdrActive: false, now: t0.addingTimeInterval(1))
         let s = store.sessions["claude:s1"]!
         XCTAssertEqual(store.sessions.count, 1)
